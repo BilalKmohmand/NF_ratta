@@ -31,11 +31,15 @@
         </button>
         <div class="collapse navbar-collapse" id="nav">
           <ul class="navbar-nav me-auto">
-            <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
-            <li class="nav-item"><a class="nav-link" href="/daily">Daily Dashboard</a></li>
-            <li class="nav-item"><a class="nav-link" href="/reports">Reports</a></li>
-            <li class="nav-item"><a class="nav-link" href="/analytics">Analytics</a></li>
-            <li class="nav-item"><a class="nav-link" href="/transactions">Transactions</a></li>
+            {% if is_logged_in %}
+              <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+              {% if request.url.path != '/' %}
+                <li class="nav-item"><a class="nav-link" href="/daily">Daily Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="/reports">Reports</a></li>
+                <li class="nav-item"><a class="nav-link" href="/analytics">Analytics</a></li>
+                <li class="nav-item"><a class="nav-link" href="/transactions">Transactions</a></li>
+              {% endif %}
+            {% endif %}
           </ul>
           <div class="d-flex align-items-center gap-2">
             <button class="btn btn-outline-secondary btn-sm" type="button" id="themeToggle" aria-label="Toggle theme">
