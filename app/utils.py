@@ -10,6 +10,7 @@ OUTGOING_CATEGORIES = [
     "Polish Wala",
     "Poshish Wala",
     "Polish & Poshish Material",
+    "Karkhanay Wala",
     "Karaya",
     "Committee",
     "Rent",
