@@ -6,7 +6,10 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DB_URL = os.getenv("DATABASE_URL", "sqlite:///./data.sqlite3").strip()
+IS_VERCEL = os.getenv("VERCEL") is not None
+
+DEFAULT_SQLITE_URL = "sqlite:////tmp/data.sqlite3" if IS_VERCEL else "sqlite:///./data.sqlite3"
+DB_URL = os.getenv("DATABASE_URL", DEFAULT_SQLITE_URL).strip()
 
 if DB_URL.startswith("postgres://"):
     DB_URL = DB_URL.replace("postgres://", "postgresql://", 1)
