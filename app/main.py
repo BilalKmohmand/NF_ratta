@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -34,6 +35,20 @@ SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-secret")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
 
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if path.startswith("/static"):
+            return await call_next(request)
+        if path in {"/login", "/logout"}:
+            return await call_next(request)
+        if not _is_logged_in(request):
+            return RedirectResponse(url="/login", status_code=303)
+        return await call_next(request)
+
+
+# Order matters: SessionMiddleware must run BEFORE auth so request.session works.
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
@@ -67,18 +82,6 @@ def _is_logged_in(request: Request) -> bool:
         return bool(request.session.get("user"))
     except Exception:
         return False
-
-
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    path = request.url.path
-    if path.startswith("/static"):
-        return await call_next(request)
-    if path in {"/login", "/logout"}:
-        return await call_next(request)
-    if not _is_logged_in(request):
-        return RedirectResponse(url="/login", status_code=303)
-    return await call_next(request)
 
 
 def common_context(request: Request):
