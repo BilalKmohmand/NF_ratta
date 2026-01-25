@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-1">Nusrat Furniture</h2>
+    <div class="text-secondary">Select a module</div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-md-6 col-lg-4">
+    <a class="text-decoration-none" href="/coming-soon/inventory">
+      <div class="card h-100 shadow-sm card-hover">
+        <div class="card-body">
+          <h5 class="card-title mb-1">Inventory</h5>
+          <div class="text-secondary">Manage stock and items</div>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6 col-lg-4">
+    <a class="text-decoration-none" href="/coming-soon/bill">
+      <div class="card h-100 shadow-sm card-hover">
+        <div class="card-body">
+          <h5 class="card-title mb-1">Bill</h5>
+          <div class="text-secondary">Create and view bills</div>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6 col-lg-4">
+    <a class="text-decoration-none" href="/coming-soon/employees">
+      <div class="card h-100 shadow-sm card-hover">
+        <div class="card-body">
+          <h5 class="card-title mb-1">Employees Data</h5>
+          <div class="text-secondary">Employee records</div>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6 col-lg-4">
+    <a class="text-decoration-none" href="/coming-soon/rent">
+      <div class="card h-100 shadow-sm card-hover">
+        <div class="card-body">
+          <h5 class="card-title mb-1">Rent Info</h5>
+          <div class="text-secondary">Rent payments & schedule</div>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6 col-lg-4">
+    <a class="text-decoration-none" href="/daily-in-out">
+      <div class="card h-100 shadow-sm border-primary card-hover">
+        <div class="card-body">
+          <div class="badge text-bg-primary mb-2">Available</div>
+          <h5 class="card-title mb-1">Daily In/Out</h5>
+          <div class="text-secondary">Transactions & payments</div>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6 col-lg-4">
+    <a class="text-decoration-none" href="/coming-soon/client-detail">
+      <div class="card h-100 shadow-sm card-hover">
+        <div class="card-body">
+          <h5 class="card-title mb-1">Client Detail</h5>
+          <div class="text-secondary">Client profiles and history</div>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+{% endblock %}

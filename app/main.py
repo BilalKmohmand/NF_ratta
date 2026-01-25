@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
@@ -28,6 +29,17 @@ from .models import Transaction
 from .utils import INCOMING_CATEGORIES, OUTGOING_CATEGORIES, clamp_date_range, parse_date, pkr_format, sat_thu_week_range
 
 app = FastAPI(title="Nusrat Furniture Payments")
+
+SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-secret")
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET,
+    same_site="lax",
+    https_only=os.getenv("VERCEL") is not None,
+)
 
 BASE_DIR = __import__("pathlib").Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -50,9 +62,29 @@ def on_startup() -> None:
         Base.metadata.create_all(bind=engine)
 
 
+def _is_logged_in(request: Request) -> bool:
+    try:
+        return bool(request.session.get("user"))
+    except Exception:
+        return False
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/static"):
+        return await call_next(request)
+    if path in {"/login", "/logout"}:
+        return await call_next(request)
+    if not _is_logged_in(request):
+        return RedirectResponse(url="/login", status_code=303)
+    return await call_next(request)
+
+
 def common_context(request: Request):
     return {
         "request": request,
+        "is_logged_in": _is_logged_in(request),
         "incoming_categories": INCOMING_CATEGORIES,
         "outgoing_categories": OUTGOING_CATEGORIES,
         "all_categories": sorted(set(INCOMING_CATEGORIES + OUTGOING_CATEGORIES)),
@@ -67,7 +99,41 @@ def filter_context(db: Session):
     return {"suggested_names": names, "filter_categories": categories}
 
 
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    if _is_logged_in(request):
+        return RedirectResponse(url="/", status_code=303)
+    ctx = common_context(request)
+    ctx.update({"error": None})
+    return TEMPLATES.TemplateResponse("login.html", ctx)
+
+
+@app.post("/login")
+def login_submit(request: Request, username: str = Form(""), password: str = Form("")):
+    if username == ADMIN_USER and password == ADMIN_PASSWORD:
+        request.session["user"] = username
+        return RedirectResponse(url="/", status_code=303)
+    ctx = common_context(request)
+    ctx.update({"error": "Invalid username or password."})
+    return TEMPLATES.TemplateResponse("login.html", ctx)
+
+
+@app.get("/logout")
+def logout(request: Request):
+    try:
+        request.session.clear()
+    except Exception:
+        pass
+    return RedirectResponse(url="/login", status_code=303)
+
+
 @app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    ctx = common_context(request)
+    return TEMPLATES.TemplateResponse("home.html", ctx)
+
+
+@app.get("/daily", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     today = dt.date.today()
     incoming, outgoing, net = crud.totals(db, from_date=today, to_date=today, type=None, category=None, name=None, q=None)
@@ -92,6 +158,18 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         }
     )
     return TEMPLATES.TemplateResponse("dashboard.html", ctx)
+
+
+@app.get("/daily-in-out")
+def daily_in_out():
+    return RedirectResponse(url="/transactions", status_code=303)
+
+
+@app.get("/coming-soon/{feature}", response_class=HTMLResponse)
+def coming_soon(request: Request, feature: str):
+    ctx = common_context(request)
+    ctx.update({"feature": feature})
+    return TEMPLATES.TemplateResponse("coming_soon.html", ctx)
 
 
 @app.get("/add", response_class=HTMLResponse)

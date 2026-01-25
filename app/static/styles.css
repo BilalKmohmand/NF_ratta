@@ -48,12 +48,22 @@ body {
 /* Subtle animations */
 .page {
   opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 260ms ease, transform 260ms ease;
+  transform: translateY(8px);
+  transition: opacity 300ms ease, transform 300ms ease;
 }
+
 body.ready .page {
   opacity: 1;
   transform: translateY(0);
+}
+
+.card-hover {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.12);
 }
 
 .btn, .card, .table, .form-control, .form-select {
