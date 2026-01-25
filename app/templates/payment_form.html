@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">{% if mode == 'edit' %}Edit{% else %}Add{% endif %} Payment</h3>
+      <div class="text-muted">{% if type == 'incoming' %}Incoming{% else %}Outgoing{% endif %}</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/transactions">Back</a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      {% if mode == 'create' %}
+        <div class="btn-group mb-3" role="group">
+          <a class="btn {% if type == 'incoming' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="/add?type=incoming">Incoming</a>
+          <a class="btn {% if type == 'outgoing' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="/add?type=outgoing">Outgoing</a>
+        </div>
+      {% endif %}
+
+      <form method="post" action="{% if mode == 'edit' %}/edit/{{ tx.id }}{% else %}/add{% endif %}">
+        {% if mode == 'create' %}
+          <input type="hidden" name="type" value="{{ type }}" />
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <label class="form-label">Date</label>
+            <input class="form-control" type="date" name="date" value="{{ (tx.date if tx else today) }}" required />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Amount (PKR)</label>
+            <input class="form-control {% if errors.get('amount_pkr') %}is-invalid{% endif %}" type="number" name="amount_pkr" min="1" step="1" value="{{ (tx.amount_pkr if tx else '') }}" required />
+            {% if errors.get('amount_pkr') %}<div class="invalid-feedback">{{ errors.get('amount_pkr') }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">{% if type == 'incoming' %}Payment Source{% else %}Category{% endif %}</label>
+            <select class="form-select {% if errors.get('category') %}is-invalid{% endif %}" name="category" id="category" required>
+              {% if type == 'incoming' %}
+                {% for c in incoming_categories %}
+                  <option value="{{ c }}" {% if tx and tx.category == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+              {% else %}
+                {% for c in outgoing_categories %}
+                  <option value="{{ c }}" {% if tx and tx.category == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+              {% endif %}
+            </select>
+            {% if errors.get('category') %}<div class="invalid-feedback">{{ errors.get('category') }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Person / Vendor name (if applicable)</label>
+            <input class="form-control" type="text" name="name" value="{{ (tx.name if tx else '') }}" />
+          </div>
+
+          <div class="col-12 col-md-6" id="billWrap">
+            <label class="form-label">Bill Number (required for Client)</label>
+            <input class="form-control {% if errors.get('bill_no') %}is-invalid{% endif %}" type="text" name="bill_no" id="bill_no" value="{{ (tx.bill_no if tx else '') }}" />
+            {% if errors.get('bill_no') %}<div class="invalid-feedback">{{ errors.get('bill_no') }}</div>{% endif %}
+            <div class="form-text">Only mandatory when Incoming source is Client.</div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" name="notes" rows="3">{{ (tx.notes if tx else '') }}</textarea>
+          </div>
+
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Save</button>
+            <a class="btn btn-outline-secondary" href="/transactions">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function updateBillVisibility() {
+    const type = "{{ type }}";
+    const billWrap = document.getElementById('billWrap');
+    const category = document.getElementById('category');
+    if (!billWrap || !category) return;
+
+    if (type === 'incoming' && category.value === 'Client') {
+      billWrap.style.display = '';
+    } else {
+      billWrap.style.display = 'none';
+      const billInput = document.getElementById('bill_no');
+      if (billInput) billInput.value = billInput.value;
+    }
+  }
+  document.getElementById('category')?.addEventListener('change', updateBillVisibility);
+  updateBillVisibility();
+</script>
+{% endblock %}

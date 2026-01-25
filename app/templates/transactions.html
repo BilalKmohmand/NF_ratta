@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Transactions</h3>
+      <div class="text-muted">Search, filter, edit, and export</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-primary" href="/add?type=incoming">Add Incoming</a>
+      <a class="btn btn-outline-danger" href="/add?type=outgoing">Add Outgoing</a>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form class="row g-2" method="get" action="/transactions">
+        <div class="col-6 col-md-2">
+          <label class="form-label">From</label>
+          <input class="form-control" type="date" name="from_date" value="{{ filters.from_date }}" />
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">To</label>
+          <input class="form-control" type="date" name="to_date" value="{{ filters.to_date }}" />
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Type</label>
+          <select class="form-select" name="type">
+            <option value="" {% if filters.type == '' %}selected{% endif %}>All</option>
+            <option value="incoming" {% if filters.type == 'incoming' %}selected{% endif %}>Incoming</option>
+            <option value="outgoing" {% if filters.type == 'outgoing' %}selected{% endif %}>Outgoing</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Category</label>
+          <select class="form-select" name="category">
+            <option value="" {% if filters.category == '' %}selected{% endif %}>All</option>
+            {% for c in filter_categories %}
+              <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Name</label>
+          <input class="form-control" name="name" value="{{ filters.name }}" placeholder="Client/Employee/Vendor" list="nameList" />
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Search</label>
+          <input class="form-control" name="q" value="{{ filters.q }}" placeholder="Notes / Bill No / Category" />
+        </div>
+
+        <div class="col-12 col-md-6 d-flex align-items-end justify-content-end gap-2">
+          <button class="btn btn-primary" type="submit">Apply</button>
+          <a class="btn btn-outline-secondary" href="/transactions">Reset</a>
+          <a class="btn btn-outline-success" href="/export/xlsx?from_date={{ filters.from_date }}&to_date={{ filters.to_date }}&type={{ filters.type }}&category={{ filters.category }}&name={{ filters.name }}&q={{ filters.q }}">Download XLSX</a>
+          <a class="btn btn-outline-dark" href="/export/pdf?from_date={{ filters.from_date }}&to_date={{ filters.to_date }}&type={{ filters.type }}&category={{ filters.category }}&name={{ filters.name }}&q={{ filters.q }}">Download PDF</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <datalist id="nameList">
+    {% for n in suggested_names %}
+      <option value="{{ n }}"></option>
+    {% endfor %}
+  </datalist>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Incoming</div><div class="fs-4 fw-bold">{{ pkr_format(totals.incoming) }}</div></div></div></div>
+    <div class="col-12 col-md-4"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Outgoing</div><div class="fs-4 fw-bold">{{ pkr_format(totals.outgoing) }}</div></div></div></div>
+    <div class="col-12 col-md-4"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Net</div><div class="fs-4 fw-bold">{{ pkr_format(totals.net) }}</div></div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Category</th>
+            <th>Name</th>
+            <th>Bill</th>
+            <th class="text-end">Amount</th>
+            <th>Notes</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in items %}
+            <tr>
+              <td>{{ t.date }}</td>
+              <td>
+                {% if t.type == 'incoming' %}
+                  <span class="badge bg-success">Incoming</span>
+                {% else %}
+                  <span class="badge bg-danger">Outgoing</span>
+                {% endif %}
+              </td>
+              <td>{{ t.category }}</td>
+              <td>{{ t.name or '' }}</td>
+              <td>{{ t.bill_no or '' }}</td>
+              <td class="text-end">{{ pkr_format(t.amount_pkr) }}</td>
+              <td>{{ (t.notes or '')[:60] }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" href="/edit/{{ t.id }}">Edit</a>
+                <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#del{{ t.id }}">Delete</button>
+
+                <div class="modal fade" id="del{{ t.id }}" tabindex="-1">
+                  <div class="modal-dialog">
+                    <div class="modal-content">
+                      <div class="modal-header">
+                        <h5 class="modal-title">Confirm Delete</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">
+                        Delete record: <b>{{ t.date }}</b> • <b>{{ t.category }}</b> • <b>{{ pkr_format(t.amount_pkr) }}</b>?
+                      </div>
+                      <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <form method="post" action="/delete/{{ t.id }}">
+                          <button class="btn btn-danger" type="submit">Delete</button>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </td>
+            </tr>
+          {% endfor %}
+          {% if items|length == 0 %}
+            <tr><td colspan="8" class="text-center text-muted py-4">No matching transactions.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

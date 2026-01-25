@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Analytics</h3>
+      <div class="text-muted">Incoming vs Outgoing • Expense breakdown • Cash flow</div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form class="row g-2" method="get" action="/analytics">
+        <div class="col-6 col-md-2">
+          <label class="form-label">From</label>
+          <input class="form-control" type="date" name="from_date" value="{{ filters.from_date }}" />
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">To</label>
+          <input class="form-control" type="date" name="to_date" value="{{ filters.to_date }}" />
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Type</label>
+          <select class="form-select" name="type">
+            <option value="" {% if filters.type == '' %}selected{% endif %}>All</option>
+            <option value="incoming" {% if filters.type == 'incoming' %}selected{% endif %}>Incoming</option>
+            <option value="outgoing" {% if filters.type == 'outgoing' %}selected{% endif %}>Outgoing</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Category</label>
+          <select class="form-select" name="category">
+            <option value="" {% if filters.category == '' %}selected{% endif %}>All</option>
+            {% for c in filter_categories %}
+              <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Name</label>
+          <input class="form-control" name="name" value="{{ filters.name }}" list="nameList" />
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Search</label>
+          <input class="form-control" name="q" value="{{ filters.q }}" />
+        </div>
+        <div class="col-12 col-md-6 d-flex align-items-end justify-content-end gap-2">
+          <button class="btn btn-primary" type="submit">Apply</button>
+          <a class="btn btn-outline-secondary" href="/analytics">Reset</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <datalist id="nameList">
+    {% for n in suggested_names %}
+      <option value="{{ n }}"></option>
+    {% endfor %}
+  </datalist>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-8">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="mb-3">Incoming vs Outgoing (per day)</h6>
+          <canvas id="barChart" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-4">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="mb-3">Expense breakdown</h6>
+          <canvas id="pieChart" height="180"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="mb-3">Cash flow (cumulative net)</h6>
+          <canvas id="lineChart" height="80"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script id="chartData" type="application/json">{{ chart | tojson }}</script>
+<script>
+  const chartData = JSON.parse(document.getElementById('chartData').textContent);
+  const labels = chartData.labels || [];
+  const incoming = chartData.incoming || [];
+  const outgoing = chartData.outgoing || [];
+  const cumulativeNet = chartData.cumulative_net || [];
+  const outgoingByCat = chartData.outgoing_by_cat || {};
+
+  new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Incoming (PKR)', data: incoming, backgroundColor: '#198754' },
+        { label: 'Outgoing (PKR)', data: outgoing, backgroundColor: '#dc3545' },
+      ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+
+  const pieLabels = Object.keys(outgoingByCat);
+  const pieValues = Object.values(outgoingByCat);
+
+  new Chart(document.getElementById('pieChart'), {
+    type: 'pie',
+    data: {
+      labels: pieLabels,
+      datasets: [{ data: pieValues }]
+    },
+    options: { responsive: true }
+  });
+
+  new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Cumulative Net (PKR)', data: cumulativeNet, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: true, tension: 0.25 }
+      ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: false } } }
+  });
+</script>
+{% endblock %}

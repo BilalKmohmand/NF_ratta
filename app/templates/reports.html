@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Reports</h3>
+      <div class="text-muted">Daily / Weekly (Sat→Thu) / Monthly</div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form class="row g-2" method="get" action="/reports">
+        <div class="col-12 col-md-2">
+          <label class="form-label">Period</label>
+          <select class="form-select" name="period">
+            <option value="daily" {% if period=='daily' %}selected{% endif %}>Daily</option>
+            <option value="weekly" {% if period=='weekly' %}selected{% endif %}>Weekly (Sat→Thu)</option>
+            <option value="monthly" {% if period=='monthly' %}selected{% endif %}>Monthly</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Anchor Date</label>
+          <input class="form-control" type="date" name="anchor" value="{{ anchor }}" />
+          <div class="form-text">Used to compute the period range.</div>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Type</label>
+          <select class="form-select" name="type">
+            <option value="" {% if filters.type == '' %}selected{% endif %}>All</option>
+            <option value="incoming" {% if filters.type == 'incoming' %}selected{% endif %}>Incoming</option>
+            <option value="outgoing" {% if filters.type == 'outgoing' %}selected{% endif %}>Outgoing</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Category</label>
+          <select class="form-select" name="category">
+            <option value="" {% if filters.category == '' %}selected{% endif %}>All</option>
+            {% for c in filter_categories %}
+              <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Name</label>
+          <input class="form-control" name="name" value="{{ filters.name }}" list="nameList" />
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Search</label>
+          <input class="form-control" name="q" value="{{ filters.q }}" />
+        </div>
+        <div class="col-12 col-md-9 d-flex align-items-end justify-content-end gap-2">
+          <button class="btn btn-primary" type="submit">Generate</button>
+          <a class="btn btn-outline-success" href="/export/xlsx?from_date={{ start }}&to_date={{ end }}&type={{ filters.type }}&category={{ filters.category }}&name={{ filters.name }}&q={{ filters.q }}">Download XLSX</a>
+          <a class="btn btn-outline-dark" href="/export/pdf?from_date={{ start }}&to_date={{ end }}&type={{ filters.type }}&category={{ filters.category }}&name={{ filters.name }}&q={{ filters.q }}">Download PDF</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <datalist id="nameList">
+    {% for n in suggested_names %}
+      <option value="{{ n }}"></option>
+    {% endfor %}
+  </datalist>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Total Incoming</div><div class="fs-4 fw-bold">{{ pkr_format(totals.incoming) }}</div></div></div></div>
+    <div class="col-12 col-md-4"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Total Outgoing</div><div class="fs-4 fw-bold">{{ pkr_format(totals.outgoing) }}</div></div></div></div>
+    <div class="col-12 col-md-4"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Net Profit / Loss</div><div class="fs-4 fw-bold">{{ pkr_format(totals.net) }}</div></div></div></div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-8">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="mb-3">Incoming vs Outgoing</h6>
+          <canvas id="barChart" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-4">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="mb-3">Expense breakdown</h6>
+          <canvas id="pieChart" height="180"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="mb-3">Cash flow (cumulative net)</h6>
+          <canvas id="lineChart" height="80"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="text-muted">Period range</div>
+      <div class="fw-semibold">{{ start }} to {{ end }}</div>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Category</th>
+            <th>Name</th>
+            <th>Bill</th>
+            <th class="text-end">Amount</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in items %}
+            <tr>
+              <td>{{ t.date }}</td>
+              <td>{{ t.type }}</td>
+              <td>{{ t.category }}</td>
+              <td>{{ t.name or '' }}</td>
+              <td>{{ t.bill_no or '' }}</td>
+              <td class="text-end">{{ pkr_format(t.amount_pkr) }}</td>
+              <td>{{ (t.notes or '')[:80] }}</td>
+            </tr>
+          {% endfor %}
+          {% if items|length == 0 %}
+            <tr><td colspan="7" class="text-center text-muted py-4">No data for this period.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script id="chartData" type="application/json">{{ chart | tojson }}</script>
+<script>
+  const chartData = JSON.parse(document.getElementById('chartData').textContent);
+  const labels = chartData.labels || [];
+  const incoming = chartData.incoming || [];
+  const outgoing = chartData.outgoing || [];
+  const cumulativeNet = chartData.cumulative_net || [];
+  const outgoingByCat = chartData.outgoing_by_cat || {};
+
+  new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Incoming (PKR)', data: incoming, backgroundColor: '#198754' },
+        { label: 'Outgoing (PKR)', data: outgoing, backgroundColor: '#dc3545' },
+      ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+
+  const pieLabels = Object.keys(outgoingByCat);
+  const pieValues = Object.values(outgoingByCat);
+
+  new Chart(document.getElementById('pieChart'), {
+    type: 'pie',
+    data: {
+      labels: pieLabels,
+      datasets: [{ data: pieValues }]
+    },
+    options: { responsive: true }
+  });
+
+  new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Cumulative Net (PKR)', data: cumulativeNet, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: true, tension: 0.25 }
+      ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: false } } }
+  });
+</script>
+{% endblock %}
