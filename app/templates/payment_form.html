@@ -63,6 +63,45 @@
             <div class="form-text">Only mandatory when Incoming source is Client.</div>
           </div>
 
+          {% if type == 'outgoing' %}
+            <div class="col-12 col-md-6">
+              <label class="form-label">Employee (optional)</label>
+              <select class="form-select {% if errors.get('employee_id') %}is-invalid{% endif %}" name="employee_id">
+                <option value="">None</option>
+                {% for e in employees %}
+                  <option value="{{ e.id }}" {% if tx and tx.employee_id == e.id %}selected{% endif %}>{{ e.full_name }} ({{ e.category }})</option>
+                {% endfor %}
+              </select>
+              {% if errors.get('employee_id') %}<div class="invalid-feedback">{{ errors.get('employee_id') }}</div>{% endif %}
+              <div class="form-text">Only link if this payment is for an employee (salary/advance/per-work).</div>
+            </div>
+
+            <div class="col-6 col-md-3">
+              <label class="form-label">Employee Tx Type</label>
+              <select class="form-select" name="employee_tx_type">
+                <option value="">None</option>
+                {% for t in employee_tx_types %}
+                  <option value="{{ t }}" {% if tx and tx.employee_tx_type == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-6 col-md-3">
+              <label class="form-label">Payment Method</label>
+              <select class="form-select" name="payment_method">
+                <option value="">None</option>
+                {% for m in payment_methods %}
+                  <option value="{{ m }}" {% if tx and tx.payment_method == m %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Reference (optional)</label>
+              <input class="form-control" name="reference" value="{{ (tx.reference if tx else '') }}" placeholder="Assignment / work details" />
+            </div>
+          {% endif %}
+
           <div class="col-12">
             <label class="form-label">Notes</label>
             <textarea class="form-control" name="notes" rows="3">{{ (tx.notes if tx else '') }}</textarea>

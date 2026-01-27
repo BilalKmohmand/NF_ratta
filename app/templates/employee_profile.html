@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center gap-3">
+      <img src="{{ emp.profile_image_url }}" alt="{{ emp.full_name }}" style="width:56px;height:56px;object-fit:cover;border-radius:16px;border:1px solid rgba(0,0,0,0.1);" />
+      <div>
+        <h3 class="mb-0">{{ emp.full_name }}</h3>
+        <div class="text-muted">{{ emp.category }} • {{ emp.work_type }} • {{ emp.status }}</div>
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/employees">Back</a>
+      <a class="btn btn-outline-primary" href="/employees/{{ emp.id }}/edit">Edit</a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-3"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Total Paid</div><div class="fs-5 fw-bold">{{ pkr_format(summary.paid) }}</div></div></div></div>
+    <div class="col-12 col-md-3"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Advance Given</div><div class="fs-5 fw-bold">{{ pkr_format(summary.advance) }}</div></div></div></div>
+    <div class="col-12 col-md-3"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Advance Balance</div><div class="fs-5 fw-bold">{{ pkr_format(summary.advance_balance) }}</div></div></div></div>
+    <div class="col-12 col-md-3"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Transactions</div><div class="fs-5 fw-bold">{{ summary.count }}</div></div></div></div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="mb-3">Weekly Assignments</h6>
+          <form class="row g-2" method="post" action="/employees/{{ emp.id }}/assignments/new">
+            <div class="col-6">
+              <label class="form-label">Week Start</label>
+              <input class="form-control" type="date" name="week_start" required />
+            </div>
+            <div class="col-6">
+              <label class="form-label">Week End</label>
+              <input class="form-control" type="date" name="week_end" required />
+            </div>
+            <div class="col-12">
+              <label class="form-label">Work Description</label>
+              <textarea class="form-control" name="description" rows="2" required></textarea>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Quantity</label>
+              <input class="form-control" type="number" name="quantity" min="0" step="1" />
+            </div>
+            <div class="col-6">
+              <label class="form-label">Status</label>
+              <select class="form-select" name="status">
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+              <button class="btn btn-outline-primary" type="submit">Add Assignment</button>
+            </div>
+          </form>
+
+          <hr />
+
+          <div class="table-responsive">
+            <table class="table mb-0">
+              <thead>
+                <tr>
+                  <th>Week</th>
+                  <th>Status</th>
+                  <th class="text-end">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in assignments %}
+                  <tr>
+                    <td>
+                      <div class="fw-semibold">{{ a.week_start }} → {{ a.week_end }}</div>
+                      <div class="text-muted">{{ a.description[:40] }}</div>
+                    </td>
+                    <td>
+                      {% if a.status == 'completed' %}
+                        <span class="badge bg-success">Completed</span>
+                      {% elif a.status == 'in_progress' %}
+                        <span class="badge bg-primary">In Progress</span>
+                      {% else %}
+                        <span class="badge bg-secondary">Pending</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-end">{{ a.quantity or '' }}</td>
+                  </tr>
+                {% endfor %}
+                {% if assignments|length == 0 %}
+                  <tr><td colspan="3" class="text-center text-muted py-3">No assignments yet.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="mb-3">Ledger (Advance Adjustment)</h6>
+          <div class="text-muted mb-2">Advance increases balance (debit). Salary/per-work decreases balance (credit).</div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th class="text-end">Debit</th>
+                  <th class="text-end">Credit</th>
+                  <th class="text-end">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in ledger %}
+                  <tr>
+                    <td>{{ row.tx.date }}</td>
+                    <td>{{ row.tx.employee_tx_type or '' }}</td>
+                    <td class="text-end">{% if row.debit %}{{ pkr_format(row.debit) }}{% endif %}</td>
+                    <td class="text-end">{% if row.credit %}{{ pkr_format(row.credit) }}{% endif %}</td>
+                    <td class="text-end fw-semibold">{{ pkr_format(row.balance) }}</td>
+                  </tr>
+                {% endfor %}
+                {% if ledger|length == 0 %}
+                  <tr><td colspan="5" class="text-center text-muted py-3">No linked transactions yet. Add payments from Daily In/Out and select this employee.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

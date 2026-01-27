@@ -22,12 +22,24 @@ from reportlab.graphics.charts.barcharts import VerticalBarChart
 from reportlab.graphics.charts.linecharts import HorizontalLineChart
 from reportlab.graphics.charts.piecharts import Pie
 from reportlab.graphics.charts.legends import Legend
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from . import crud
 from .db import Base, IS_SQLITE, SessionLocal, engine
-from .models import Transaction
-from .utils import INCOMING_CATEGORIES, OUTGOING_CATEGORIES, clamp_date_range, parse_date, pkr_format, sat_thu_week_range
+from .models import Employee, Transaction, WeeklyAssignment
+from .utils import (
+    EMPLOYEE_CATEGORIES,
+    EMPLOYEE_WORK_TYPES,
+    EMPLOYEE_TX_TYPES,
+    INCOMING_CATEGORIES,
+    OUTGOING_CATEGORIES,
+    PAYMENT_METHODS,
+    clamp_date_range,
+    parse_date,
+    pkr_format,
+    sat_thu_week_range,
+)
 
 app = FastAPI(title="Nusrat Furniture Payments")
 
@@ -76,6 +88,30 @@ def on_startup() -> None:
     if IS_SQLITE or (auto_create is not None and auto_create.strip() == "1"):
         Base.metadata.create_all(bind=engine)
 
+        if not IS_SQLITE:
+            try:
+                insp = inspect(engine)
+                cols = {c["name"] for c in insp.get_columns("transactions")}
+
+                alter_stmts: list[str] = []
+                if "employee_id" not in cols:
+                    alter_stmts.append("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS employee_id INTEGER")
+                if "employee_tx_type" not in cols:
+                    alter_stmts.append("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS employee_tx_type VARCHAR(32)")
+                if "payment_method" not in cols:
+                    alter_stmts.append("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(32)")
+                if "assignment_id" not in cols:
+                    alter_stmts.append("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS assignment_id INTEGER")
+                if "reference" not in cols:
+                    alter_stmts.append("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS reference VARCHAR(256)")
+
+                if alter_stmts:
+                    with engine.begin() as conn:
+                        for stmt in alter_stmts:
+                            conn.execute(text(stmt))
+            except Exception:
+                pass
+
 
 def _is_logged_in(request: Request) -> bool:
     try:
@@ -90,10 +126,221 @@ def common_context(request: Request):
         "is_logged_in": _is_logged_in(request),
         "incoming_categories": INCOMING_CATEGORIES,
         "outgoing_categories": OUTGOING_CATEGORIES,
+        "employee_categories": EMPLOYEE_CATEGORIES,
+        "employee_work_types": EMPLOYEE_WORK_TYPES,
+        "employee_tx_types": EMPLOYEE_TX_TYPES,
+        "payment_methods": PAYMENT_METHODS,
         "all_categories": sorted(set(INCOMING_CATEGORIES + OUTGOING_CATEGORIES)),
         "pkr_format": pkr_format,
         "today": dt.date.today().isoformat(),
     }
+
+
+@app.get("/employees", response_class=HTMLResponse)
+def employees(request: Request, db: Session = Depends(get_db), status: str | None = None):
+    items = crud.list_employees(db, status=status)
+    ctx = common_context(request)
+    ctx.update({"items": items, "status": status or ""})
+    return TEMPLATES.TemplateResponse("employees.html", ctx)
+
+
+@app.get("/employees/new", response_class=HTMLResponse)
+def employee_new(request: Request):
+    ctx = common_context(request)
+    ctx.update({"mode": "create", "emp": None, "errors": {}})
+    return TEMPLATES.TemplateResponse("employee_form.html", ctx)
+
+
+@app.post("/employees/new", response_class=HTMLResponse)
+def employee_new_post(
+    request: Request,
+    db: Session = Depends(get_db),
+    full_name: str = Form(...),
+    father_name: str | None = Form(None),
+    cnic: str | None = Form(None),
+    mobile_number: str | None = Form(None),
+    address: str | None = Form(None),
+    emergency_contact: str | None = Form(None),
+    joining_date: str = Form(...),
+    status: str = Form("active"),
+    category: str = Form(...),
+    work_type: str = Form(...),
+    role_description: str | None = Form(None),
+    payment_rate: int | None = Form(None),
+    profile_image_url: str = Form(...),
+):
+    jd = parse_date(joining_date) or dt.date.today()
+    errors: dict[str, str] = {}
+    if not full_name.strip():
+        errors["full_name"] = "Full name is required."
+    if category not in EMPLOYEE_CATEGORIES:
+        errors["category"] = "Invalid category."
+    if work_type not in EMPLOYEE_WORK_TYPES:
+        errors["work_type"] = "Invalid work type."
+    if status not in {"active", "inactive"}:
+        errors["status"] = "Invalid status."
+    if not (profile_image_url or "").strip():
+        errors["profile_image_url"] = "Profile image URL is required."
+    if errors:
+        ctx = common_context(request)
+        ctx.update(
+            {
+                "mode": "create",
+                "emp": {
+                    "full_name": full_name,
+                    "father_name": father_name,
+                    "cnic": cnic,
+                    "mobile_number": mobile_number,
+                    "address": address,
+                    "emergency_contact": emergency_contact,
+                    "joining_date": jd,
+                    "status": status,
+                    "category": category,
+                    "work_type": work_type,
+                    "role_description": role_description,
+                    "payment_rate": payment_rate,
+                    "profile_image_url": profile_image_url,
+                },
+                "errors": errors,
+            }
+        )
+        return TEMPLATES.TemplateResponse("employee_form.html", ctx, status_code=400)
+
+    emp = crud.create_employee(
+        db,
+        full_name=full_name.strip(),
+        father_name=father_name,
+        cnic=cnic,
+        mobile_number=mobile_number,
+        address=address,
+        emergency_contact=emergency_contact,
+        joining_date=jd,
+        status=status,
+        category=category,
+        work_type=work_type,
+        role_description=role_description,
+        payment_rate=payment_rate,
+        profile_image_url=profile_image_url.strip(),
+    )
+    return RedirectResponse(url=f"/employees/{emp.id}", status_code=303)
+
+
+@app.get("/employees/{employee_id}", response_class=HTMLResponse)
+def employee_profile(request: Request, employee_id: int, db: Session = Depends(get_db)):
+    emp = crud.get_employee(db, employee_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    txs = crud.employee_transactions(db, employee_id=employee_id, limit=1000)
+    summary = crud.employee_financial_summary(db, employee_id=employee_id)
+    assignments = crud.list_assignments_for_employee(db, employee_id=employee_id)
+
+    ledger = []
+    running = 0
+    for txx in txs:
+        debit = 0
+        credit = 0
+        if (txx.employee_tx_type or "") == "advance":
+            debit = int(txx.amount_pkr)
+            running += debit
+        elif (txx.employee_tx_type or "") in {"salary", "per_work"}:
+            credit = int(txx.amount_pkr)
+            running -= credit
+        ledger.append({"tx": txx, "debit": debit, "credit": credit, "balance": running})
+
+    ctx = common_context(request)
+    ctx.update({"emp": emp, "summary": summary, "ledger": ledger, "assignments": assignments})
+    return TEMPLATES.TemplateResponse("employee_profile.html", ctx)
+
+
+@app.get("/employees/{employee_id}/edit", response_class=HTMLResponse)
+def employee_edit(request: Request, employee_id: int, db: Session = Depends(get_db)):
+    emp = crud.get_employee(db, employee_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Not found")
+    ctx = common_context(request)
+    ctx.update({"mode": "edit", "emp": emp, "errors": {}})
+    return TEMPLATES.TemplateResponse("employee_form.html", ctx)
+
+
+@app.post("/employees/{employee_id}/edit", response_class=HTMLResponse)
+def employee_edit_post(
+    request: Request,
+    employee_id: int,
+    db: Session = Depends(get_db),
+    full_name: str = Form(...),
+    father_name: str | None = Form(None),
+    cnic: str | None = Form(None),
+    mobile_number: str | None = Form(None),
+    address: str | None = Form(None),
+    emergency_contact: str | None = Form(None),
+    joining_date: str = Form(...),
+    status: str = Form("active"),
+    category: str = Form(...),
+    work_type: str = Form(...),
+    role_description: str | None = Form(None),
+    payment_rate: int | None = Form(None),
+    profile_image_url: str = Form(...),
+):
+    emp = crud.get_employee(db, employee_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Not found")
+    jd = parse_date(joining_date) or dt.date.today()
+    errors: dict[str, str] = {}
+    if not full_name.strip():
+        errors["full_name"] = "Full name is required."
+    if category not in EMPLOYEE_CATEGORIES:
+        errors["category"] = "Invalid category."
+    if work_type not in EMPLOYEE_WORK_TYPES:
+        errors["work_type"] = "Invalid work type."
+    if status not in {"active", "inactive"}:
+        errors["status"] = "Invalid status."
+    if not (profile_image_url or "").strip():
+        errors["profile_image_url"] = "Profile image URL is required."
+    if errors:
+        ctx = common_context(request)
+        ctx.update({"mode": "edit", "emp": emp, "errors": errors})
+        return TEMPLATES.TemplateResponse("employee_form.html", ctx, status_code=400)
+
+    crud.update_employee(
+        db,
+        emp,
+        full_name=full_name.strip(),
+        father_name=father_name,
+        cnic=cnic,
+        mobile_number=mobile_number,
+        address=address,
+        emergency_contact=emergency_contact,
+        joining_date=jd,
+        status=status,
+        category=category,
+        work_type=work_type,
+        role_description=role_description,
+        payment_rate=payment_rate,
+        profile_image_url=profile_image_url.strip(),
+    )
+    return RedirectResponse(url=f"/employees/{employee_id}", status_code=303)
+
+
+@app.post("/employees/{employee_id}/assignments/new")
+def assignment_new(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    week_start: str = Form(...),
+    week_end: str = Form(...),
+    description: str = Form(...),
+    quantity: int | None = Form(None),
+    status: str = Form("pending"),
+):
+    emp = crud.get_employee(db, employee_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Not found")
+    ws = parse_date(week_start) or dt.date.today()
+    we = parse_date(week_end) or ws
+    if status not in {"pending", "in_progress", "completed"}:
+        status = "pending"
+    crud.create_assignment(db, employee_id=employee_id, week_start=ws, week_end=we, description=description, quantity=quantity, status=status)
+    return RedirectResponse(url=f"/employees/{employee_id}", status_code=303)
 
 
 def filter_context(db: Session):
@@ -176,17 +423,19 @@ def coming_soon(request: Request, feature: str):
 
 
 @app.get("/add", response_class=HTMLResponse)
-def add_payment(request: Request, type: str = "incoming"):
+def add_payment(request: Request, db: Session = Depends(get_db), type: str = "incoming"):
     if type not in {"incoming", "outgoing"}:
         type = "incoming"
 
     ctx = common_context(request)
+    employees = crud.list_employees(db, status="active") if type == "outgoing" else []
     ctx.update(
         {
             "mode": "create",
             "type": type,
             "tx": None,
             "errors": {},
+            "employees": employees,
         }
     )
     return TEMPLATES.TemplateResponse("payment_form.html", ctx)
@@ -225,14 +474,23 @@ def add_payment_post(
     name: str | None = Form(None),
     bill_no: str | None = Form(None),
     notes: str | None = Form(None),
+    employee_id: int | None = Form(None),
+    employee_tx_type: str | None = Form(None),
+    payment_method: str | None = Form(None),
+    reference: str | None = Form(None),
 ):
     parsed_date = parse_date(date)
     if not parsed_date:
         parsed_date = dt.date.today()
 
     errors = validate_form(type, category, bill_no, amount_pkr)
+    if type == "outgoing" and employee_id:
+        emp = crud.get_employee(db, employee_id)
+        if not emp:
+            errors["employee_id"] = "Invalid employee."
     if errors:
         ctx = common_context(request)
+        employees = crud.list_employees(db, status="active") if type == "outgoing" else []
         ctx.update(
             {
                 "mode": "create",
@@ -244,8 +502,13 @@ def add_payment_post(
                     "name": name,
                     "bill_no": bill_no,
                     "notes": notes,
+                    "employee_id": employee_id,
+                    "employee_tx_type": employee_tx_type,
+                    "payment_method": payment_method,
+                    "reference": reference,
                 },
                 "errors": errors,
+                "employees": employees,
             }
         )
         return TEMPLATES.TemplateResponse("payment_form.html", ctx, status_code=400)
@@ -259,6 +522,10 @@ def add_payment_post(
         name=name,
         bill_no=bill_no,
         notes=notes,
+        employee_id=employee_id if type == "outgoing" else None,
+        employee_tx_type=employee_tx_type if type == "outgoing" else None,
+        payment_method=payment_method if type == "outgoing" else None,
+        reference=reference if type == "outgoing" else None,
     )
     return RedirectResponse(url="/transactions", status_code=303)
 
@@ -308,7 +575,8 @@ def edit_payment(request: Request, tx_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Not found")
 
     ctx = common_context(request)
-    ctx.update({"mode": "edit", "type": tx.type, "tx": tx, "errors": {}})
+    employees = crud.list_employees(db, status="active") if tx.type == "outgoing" else []
+    ctx.update({"mode": "edit", "type": tx.type, "tx": tx, "errors": {}, "employees": employees})
     return TEMPLATES.TemplateResponse("payment_form.html", ctx)
 
 
@@ -323,6 +591,10 @@ def edit_payment_post(
     name: str | None = Form(None),
     bill_no: str | None = Form(None),
     notes: str | None = Form(None),
+    employee_id: int | None = Form(None),
+    employee_tx_type: str | None = Form(None),
+    payment_method: str | None = Form(None),
+    reference: str | None = Form(None),
 ):
     tx = crud.get_transaction(db, tx_id)
     if not tx or tx.is_deleted:
@@ -333,8 +605,13 @@ def edit_payment_post(
         parsed_date = dt.date.today()
 
     errors = validate_form(tx.type, category, bill_no, int(amount_pkr))
+    if tx.type == "outgoing" and employee_id:
+        emp = crud.get_employee(db, employee_id)
+        if not emp:
+            errors["employee_id"] = "Invalid employee."
     if errors:
         ctx = common_context(request)
+        employees = crud.list_employees(db, status="active") if tx.type == "outgoing" else []
         ctx.update(
             {
                 "mode": "edit",
@@ -348,8 +625,13 @@ def edit_payment_post(
                     "name": name,
                     "bill_no": bill_no,
                     "notes": notes,
+                    "employee_id": employee_id,
+                    "employee_tx_type": employee_tx_type,
+                    "payment_method": payment_method,
+                    "reference": reference,
                 },
                 "errors": errors,
+                "employees": employees,
             }
         )
         return TEMPLATES.TemplateResponse("payment_form.html", ctx, status_code=400)
@@ -363,6 +645,10 @@ def edit_payment_post(
         name=name,
         bill_no=bill_no,
         notes=notes,
+        employee_id=employee_id if tx.type == "outgoing" else None,
+        employee_tx_type=employee_tx_type if tx.type == "outgoing" else None,
+        payment_method=payment_method if tx.type == "outgoing" else None,
+        reference=reference if tx.type == "outgoing" else None,
     )
 
     return RedirectResponse(url="/transactions", status_code=303)

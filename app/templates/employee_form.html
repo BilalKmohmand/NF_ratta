@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">{% if mode == 'edit' %}Edit{% else %}New{% endif %} Employee</h3>
+      <div class="text-muted">Profile information</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/employees">Back</a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post" action="{% if mode == 'edit' %}/employees/{{ emp.id }}/edit{% else %}/employees/new{% endif %}">
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label">Full Name</label>
+            <input class="form-control {% if errors.get('full_name') %}is-invalid{% endif %}" name="full_name" value="{{ (emp.full_name if emp else '') }}" required />
+            {% if errors.get('full_name') %}<div class="invalid-feedback">{{ errors.get('full_name') }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Father Name</label>
+            <input class="form-control" name="father_name" value="{{ (emp.father_name if emp else '') }}" />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">CNIC (optional)</label>
+            <input class="form-control" name="cnic" value="{{ (emp.cnic if emp else '') }}" />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Mobile Number</label>
+            <input class="form-control" name="mobile_number" value="{{ (emp.mobile_number if emp else '') }}" />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Emergency Contact</label>
+            <input class="form-control" name="emergency_contact" value="{{ (emp.emergency_contact if emp else '') }}" />
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Address</label>
+            <textarea class="form-control" name="address" rows="2">{{ (emp.address if emp else '') }}</textarea>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Joining Date</label>
+            <input class="form-control" type="date" name="joining_date" value="{{ (emp.joining_date if emp else today) }}" required />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Status</label>
+            <select class="form-select {% if errors.get('status') %}is-invalid{% endif %}" name="status">
+              <option value="active" {% if emp and emp.status == 'active' %}selected{% endif %}>Active</option>
+              <option value="inactive" {% if emp and emp.status == 'inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+            {% if errors.get('status') %}<div class="invalid-feedback">{{ errors.get('status') }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Employee Category</label>
+            <select class="form-select {% if errors.get('category') %}is-invalid{% endif %}" name="category" required>
+              {% for c in employee_categories %}
+                <option value="{{ c }}" {% if emp and emp.category == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
+            {% if errors.get('category') %}<div class="invalid-feedback">{{ errors.get('category') }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Work Type</label>
+            <select class="form-select {% if errors.get('work_type') %}is-invalid{% endif %}" name="work_type" required>
+              {% for wt in employee_work_types %}
+                <option value="{{ wt }}" {% if emp and emp.work_type == wt %}selected{% endif %}>{{ wt }}</option>
+              {% endfor %}
+            </select>
+            {% if errors.get('work_type') %}<div class="invalid-feedback">{{ errors.get('work_type') }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Payment Rate (PKR)</label>
+            <input class="form-control" type="number" name="payment_rate" min="0" step="1" value="{{ (emp.payment_rate if emp else '') }}" />
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Role / Skill Description</label>
+            <input class="form-control" name="role_description" value="{{ (emp.role_description if emp else '') }}" />
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Profile Image URL</label>
+            <input class="form-control {% if errors.get('profile_image_url') %}is-invalid{% endif %}" name="profile_image_url" value="{{ (emp.profile_image_url if emp else '') }}" required />
+            {% if errors.get('profile_image_url') %}<div class="invalid-feedback">{{ errors.get('profile_image_url') }}</div>{% endif %}
+            <div class="form-text">For now use a public image URL. (We can add real uploads later.)</div>
+          </div>
+
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Save</button>
+            <a class="btn btn-outline-secondary" href="/employees">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

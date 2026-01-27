@@ -19,6 +19,37 @@ OUTGOING_CATEGORIES = [
     "Zaati Kharcha",
 ]
 
+EMPLOYEE_CATEGORIES = [
+    "Factory Worker (Karkhanay Wala)",
+    "Polish Worker",
+    "Upholstery / Poshish Worker",
+    "Helper / Mazdoor",
+    "Delivery / Loader",
+    "Supervisor / Office Staff",
+    "Contract / Per-Work Employee",
+]
+
+EMPLOYEE_WORK_TYPES = [
+    "daily",
+    "weekly",
+    "per_item",
+    "contract",
+]
+
+EMPLOYEE_TX_TYPES = [
+    "salary",
+    "advance",
+    "per_work",
+    "expense",
+]
+
+PAYMENT_METHODS = [
+    "cash",
+    "bank",
+    "jazzcash",
+    "easypaisa",
+]
+
 
 def parse_date(value: str | None) -> dt.date | None:
     if not value:
