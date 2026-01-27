@@ -85,6 +85,17 @@ def _upload_image_to_cloudinary(*, raw: bytes, folder: str, public_id: str) -> s
     except Exception:
         raise HTTPException(status_code=500, detail="Image upload failed")
 
+
+def _employee_outgoing_category(emp: Employee) -> str:
+    c = (emp.category or "").lower()
+    if "karkhan" in c or "factory" in c:
+        return "Karkhanay Wala"
+    if "polish" in c:
+        return "Polish Wala"
+    if "poshish" in c or "upholstery" in c:
+        return "Poshish Wala"
+    return "Employee"
+
 app = FastAPI(title="Nusrat Furniture Payments")
 
 SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-secret")
@@ -622,9 +633,16 @@ def add_payment_post(
     if not parsed_date:
         parsed_date = dt.date.today()
 
-    errors = validate_form(type, category, bill_no, amount_pkr)
+    emp = None
     if type == "outgoing" and employee_id:
         emp = crud.get_employee(db, employee_id)
+        if emp:
+            category = _employee_outgoing_category(emp)
+            if not (name or "").strip():
+                name = emp.full_name
+
+    errors = validate_form(type, category, bill_no, amount_pkr)
+    if type == "outgoing" and employee_id:
         if not emp:
             errors["employee_id"] = "Invalid employee."
     if errors:
@@ -743,9 +761,16 @@ def edit_payment_post(
     if not parsed_date:
         parsed_date = dt.date.today()
 
-    errors = validate_form(tx.type, category, bill_no, int(amount_pkr))
+    emp = None
     if tx.type == "outgoing" and employee_id:
         emp = crud.get_employee(db, employee_id)
+        if emp:
+            category = _employee_outgoing_category(emp)
+            if not (name or "").strip():
+                name = emp.full_name
+
+    errors = validate_form(tx.type, category, bill_no, int(amount_pkr))
+    if tx.type == "outgoing" and employee_id:
         if not emp:
             errors["employee_id"] = "Invalid employee."
     if errors:
