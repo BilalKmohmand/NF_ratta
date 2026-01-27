@@ -45,6 +45,13 @@ from .utils import (
 
 MAX_IMAGE_UPLOAD_BYTES = int(os.getenv("MAX_IMAGE_UPLOAD_BYTES", "800000"))
 
+_CLOUDINARY_URL = os.getenv("CLOUDINARY_URL")
+if _CLOUDINARY_URL:
+    import cloudinary
+    import cloudinary.uploader
+
+    cloudinary.config(cloudinary_url=_CLOUDINARY_URL)
+
 
 def _decode_data_url(data_url: str) -> tuple[str, bytes] | None:
     if not data_url:
@@ -58,6 +65,25 @@ def _decode_data_url(data_url: str) -> tuple[str, bytes] | None:
         return content_type, raw
     except Exception:
         return None
+
+
+def _upload_image_to_cloudinary(*, raw: bytes, folder: str, public_id: str) -> str:
+    if not _CLOUDINARY_URL:
+        raise HTTPException(status_code=500, detail="Cloudinary is not configured")
+    try:
+        res = cloudinary.uploader.upload(
+            raw,
+            folder=folder,
+            public_id=public_id,
+            overwrite=True,
+            resource_type="image",
+        )
+        url = (res or {}).get("secure_url") or (res or {}).get("url")
+        if not url:
+            raise Exception("Missing URL")
+        return str(url)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Image upload failed")
 
 app = FastAPI(title="Nusrat Furniture Payments")
 
@@ -135,6 +161,8 @@ def on_startup() -> None:
                 emp_alter: list[str] = []
                 if "profile_image_url" not in emp_cols:
                     emp_alter.append("ALTER TABLE employees ADD COLUMN IF NOT EXISTS profile_image_url VARCHAR(512)")
+                if "cnic_image_url" not in emp_cols:
+                    emp_alter.append("ALTER TABLE employees ADD COLUMN IF NOT EXISTS cnic_image_url VARCHAR(512)")
                 if "profile_image_data" not in emp_cols:
                     emp_alter.append("ALTER TABLE employees ADD COLUMN IF NOT EXISTS profile_image_data TEXT")
                 if "cnic_image_data" not in emp_cols:
@@ -242,23 +270,21 @@ def employee_new_post(
         )
         return TEMPLATES.TemplateResponse("employee_form.html", ctx, status_code=400)
 
-    profile_data = None
+    profile_url = (profile_image_url or "").strip() or None
     if profile_image is not None:
         raw = profile_image.file.read()
         if raw and len(raw) > MAX_IMAGE_UPLOAD_BYTES:
             errors["profile_image_url"] = f"Profile image is too large. Max {MAX_IMAGE_UPLOAD_BYTES // 1000}KB."
         elif raw:
-            b64 = base64.b64encode(raw).decode("ascii")
-            profile_data = f"data:{profile_image.content_type or 'application/octet-stream'};base64,{b64}"
+            profile_url = _upload_image_to_cloudinary(raw=raw, folder="nf_employees", public_id=f"profile_{int(dt.datetime.utcnow().timestamp())}")
 
-    cnic_data = None
+    cnic_url = None
     if cnic_image is not None:
         raw2 = cnic_image.file.read()
         if raw2 and len(raw2) > MAX_IMAGE_UPLOAD_BYTES:
             errors["cnic_image"] = f"CNIC image is too large. Max {MAX_IMAGE_UPLOAD_BYTES // 1000}KB."
         elif raw2:
-            b64_2 = base64.b64encode(raw2).decode("ascii")
-            cnic_data = f"data:{cnic_image.content_type or 'application/octet-stream'};base64,{b64_2}"
+            cnic_url = _upload_image_to_cloudinary(raw=raw2, folder="nf_employees", public_id=f"cnic_{int(dt.datetime.utcnow().timestamp())}")
 
     if errors:
         ctx = common_context(request)
@@ -279,11 +305,10 @@ def employee_new_post(
         work_type=work_type,
         role_description=role_description,
         payment_rate=payment_rate,
-        profile_image_url=(profile_image_url or "").strip(),
+        profile_image_url=profile_url,
     )
-    if profile_data or cnic_data:
-        emp.profile_image_data = profile_data
-        emp.cnic_image_data = cnic_data
+    if cnic_url:
+        emp.cnic_image_url = cnic_url
         db.add(emp)
         db.commit()
     return RedirectResponse(url=f"/employees/{emp.id}", status_code=303)
@@ -417,15 +442,15 @@ def employee_edit_post(
         if raw and len(raw) > MAX_IMAGE_UPLOAD_BYTES:
             errors["profile_image_url"] = f"Profile image is too large. Max {MAX_IMAGE_UPLOAD_BYTES // 1000}KB."
         elif raw:
-            b64 = base64.b64encode(raw).decode("ascii")
-            emp.profile_image_data = f"data:{profile_image.content_type or 'application/octet-stream'};base64,{b64}"
+            emp.profile_image_url = _upload_image_to_cloudinary(raw=raw, folder="nf_employees", public_id=f"profile_{emp.id}")
+            emp.profile_image_data = None
     if cnic_image is not None:
         raw2 = cnic_image.file.read()
         if raw2 and len(raw2) > MAX_IMAGE_UPLOAD_BYTES:
             errors["cnic_image"] = f"CNIC image is too large. Max {MAX_IMAGE_UPLOAD_BYTES // 1000}KB."
         elif raw2:
-            b64_2 = base64.b64encode(raw2).decode("ascii")
-            emp.cnic_image_data = f"data:{cnic_image.content_type or 'application/octet-stream'};base64,{b64_2}"
+            emp.cnic_image_url = _upload_image_to_cloudinary(raw=raw2, folder="nf_employees", public_id=f"cnic_{emp.id}")
+            emp.cnic_image_data = None
 
     if errors:
         ctx = common_context(request)

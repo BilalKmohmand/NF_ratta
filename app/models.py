@@ -29,6 +29,7 @@ class Employee(Base):
     payment_rate = Column(Integer, nullable=True)
 
     profile_image_url = Column(String(512), nullable=True)
+    cnic_image_url = Column(String(512), nullable=True)
     profile_image_data = Column(Text, nullable=True)
     cnic_image_data = Column(Text, nullable=True)
 
