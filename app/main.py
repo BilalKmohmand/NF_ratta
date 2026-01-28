@@ -576,8 +576,21 @@ def _require_seed_token(token: str | None) -> None:
 def admin_seed(request: Request):
     if not _seed_is_enabled():
         raise HTTPException(status_code=404, detail="Not found")
-    ctx = common_context(request)
-    return TEMPLATES.TemplateResponse("admin_seed.html", ctx)
+    html = """
+    <html><head><title>Seed Test Data</title></head>
+    <body style='font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding:24px;'>
+      <h2 style='margin:0 0 8px 0;'>Seed Test Data</h2>
+      <div style='color:#666; margin:0 0 16px 0;'>Temporary: creates sample employees and transactions</div>
+      <form method='post' action='/admin/seed/run' style='max-width:420px;'>
+        <label style='display:block; margin:0 0 6px 0;'>Seed Token</label>
+        <input name='token' placeholder='Enter SEED_TOKEN' style='width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; margin:0 0 12px 0;' />
+        <button type='submit' style='padding:10px 14px; border-radius:10px; border:0; background:#2563eb; color:#fff; font-weight:600;'>Create Test Data</button>
+      </form>
+      <div style='color:#666; margin-top:14px; font-size:13px;'>Requires env: ENABLE_SEED=1 and SEED_TOKEN.</div>
+      <div style='margin-top:14px; font-size:13px;'><a href='/employees'>Employees</a> | <a href='/transactions'>Transactions</a></div>
+    </body></html>
+    """
+    return HTMLResponse(content=html)
 
 
 @app.post("/admin/seed/run", response_class=HTMLResponse)
@@ -664,9 +677,20 @@ def admin_seed_run(request: Request, db: Session = Depends(get_db), token: str |
 
     _backfill_employees_from_transactions(db)
 
-    ctx = common_context(request)
-    ctx.update({"created_employees": created_employees, "created_transactions": created_transactions, "marker": marker})
-    return TEMPLATES.TemplateResponse("admin_seed_result.html", ctx)
+    items = "".join([f"<li>{n}</li>" for n in created_employees])
+    html = f"""
+    <html><head><title>Seed Result</title></head>
+    <body style='font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding:24px;'>
+      <h2 style='margin:0 0 8px 0;'>Seed Test Data</h2>
+      <div style='color:#666; margin:0 0 16px 0;'>Completed</div>
+      <div style='margin:0 0 12px 0;'><b>Marker:</b> {marker}</div>
+      <div style='margin:0 0 12px 0;'><b>Employees created:</b> {len(created_employees)}</div>
+      {'<ul style="margin:0 0 12px 18px;">' + items + '</ul>' if created_employees else ''}
+      <div style='margin:0 0 12px 0;'><b>Transactions created:</b> {created_transactions}</div>
+      <div style='margin-top:14px; font-size:13px;'><a href='/employees'>Employees</a> | <a href='/transactions'>Transactions</a> | <a href='/admin/seed'>Back</a></div>
+    </body></html>
+    """
+    return HTMLResponse(content=html)
 
 
 @app.get("/admin/tx-names-debug", response_class=HTMLResponse)
