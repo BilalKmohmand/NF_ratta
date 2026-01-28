@@ -211,6 +211,7 @@ def common_context(request: Request):
 
 @app.get("/employees", response_class=HTMLResponse)
 def employees(request: Request, db: Session = Depends(get_db), status: str | None = None):
+    _backfill_employees_from_transactions(db)
     items = crud.list_employees(db, status=status)
     ctx = common_context(request)
     ctx.update({"items": items, "status": status or ""})
@@ -647,6 +648,78 @@ def _map_category_to_employee_category(tx_category: str) -> str:
     if "poshish" in cat or "upholstery" in cat:
         return "Upholstery / Poshish Worker"
     return "Helper / Mazdoor"
+
+
+def _backfill_employees_from_transactions(db: Session) -> None:
+    try:
+        rows = db.execute(
+            select(Transaction.name, Transaction.category)
+            .where(Transaction.is_deleted.is_(False))
+            .where(Transaction.type == "outgoing")
+            .where(Transaction.name.is_not(None))
+            .distinct()
+        ).all()
+    except Exception:
+        return
+
+    for raw_name, tx_category in rows:
+        if not raw_name:
+            continue
+        name = raw_name.strip()
+        if not name:
+            continue
+
+        # Create or find employee
+        emp = db.execute(select(Employee).where(Employee.full_name.ilike(name))).scalar_one_or_none()
+        if not emp:
+            try:
+                emp = crud.create_employee(
+                    db,
+                    full_name=name,
+                    father_name=None,
+                    cnic=None,
+                    mobile_number=None,
+                    address=None,
+                    emergency_contact=None,
+                    joining_date=dt.date.today(),
+                    status="active",
+                    category=_map_category_to_employee_category(tx_category or ""),
+                    work_type="daily",
+                    role_description=None,
+                    payment_rate=None,
+                    profile_image_url="",
+                )
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                continue
+
+        # Link transactions for this name to the employee (only if not already linked)
+        try:
+            txs = db.execute(
+                select(Transaction)
+                .where(Transaction.is_deleted.is_(False))
+                .where(Transaction.type == "outgoing")
+                .where(Transaction.name.ilike(name))
+                .where(Transaction.employee_id.is_(None))
+            ).scalars().all()
+        except Exception:
+            continue
+
+        for tx in txs:
+            tx.employee_id = emp.id
+            if not tx.employee_tx_type:
+                tx.employee_tx_type = "salary"
+
+    try:
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 
 @app.get("/", response_class=HTMLResponse)
