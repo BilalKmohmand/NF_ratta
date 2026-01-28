@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import datetime as dt
 import io
 import os
@@ -216,6 +217,35 @@ def employees(request: Request, db: Session = Depends(get_db), status: str | Non
     ctx = common_context(request)
     ctx.update({"items": items, "status": status or ""})
     return TEMPLATES.TemplateResponse("employees.html", ctx)
+
+
+@app.get("/admin/transactions-unique.csv")
+def transactions_unique_csv(db: Session = Depends(get_db)):
+    stmt = (
+        select(
+            func.trim(Transaction.name).label("name"),
+            Transaction.category.label("category"),
+            func.count(Transaction.id).label("tx_count"),
+        )
+        .where(Transaction.is_deleted.is_(False))
+        .where(Transaction.name.is_not(None))
+        .where(func.trim(Transaction.name) != "")
+        .group_by(func.lower(func.trim(Transaction.name)), Transaction.category)
+        .order_by(func.count(Transaction.id).desc(), func.lower(func.trim(Transaction.name)).asc(), Transaction.category.asc())
+    )
+    rows = db.execute(stmt).all()
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["name", "category", "tx_count"])
+    for r in rows:
+        w.writerow([r.name, r.category, int(r.tx_count or 0)])
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=transactions_unique.csv"},
+    )
 
 
 @app.get("/employees/new", response_class=HTMLResponse)
