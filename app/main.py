@@ -527,6 +527,18 @@ def logout(request: Request):
     return RedirectResponse(url="/login", status_code=303)
 
 
+@app.get("/admin/tx-names-debug", response_class=HTMLResponse)
+def tx_names_debug(request: Request, db: Session = Depends(get_db)):
+    # Show all distinct transaction names and categories
+    stmt = select(Transaction.name, Transaction.category).where(Transaction.is_deleted.is_(False)).where(Transaction.name.is_not(None)).distinct()
+    rows = db.execute(stmt).all()
+    # Show all current employees
+    emp_rows = db.execute(select(Employee.full_name, Employee.category).where(Employee.is_deleted.is_(False))).all()
+    ctx = common_context(request)
+    ctx.update({"tx_rows": rows, "emp_rows": emp_rows})
+    return TEMPLATES.TemplateResponse("admin_tx_names_debug.html", ctx)
+
+
 @app.get("/admin/sync-employees-from-transactions", response_class=HTMLResponse)
 def sync_employees_from_transactions(request: Request, db: Session = Depends(get_db)):
     stmt = select(Transaction.name, Transaction.category).where(Transaction.is_deleted.is_(False)).where(Transaction.name.is_not(None)).distinct()

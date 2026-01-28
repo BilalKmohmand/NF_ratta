@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Transaction Names & Employees Debug</h3>
+      <div class="text-muted">Raw data from database</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/employees">Employees</a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <strong>Distinct Transaction Names & Categories</strong>
+    </div>
+    <div class="card-body">
+      <pre class="bg-light p-2 rounded" style="font-size:0.875rem;max-height:300px;overflow-y:auto;">{{ tx_rows }}</pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <strong>Current Employees</strong>
+    </div>
+    <div class="card-body">
+      <pre class="bg-light p-2 rounded" style="font-size:0.875rem;max-height:300px;overflow-y:auto;">{{ emp_rows }}</pre>
+    </div>
+  </div>
+{% endblock %}
