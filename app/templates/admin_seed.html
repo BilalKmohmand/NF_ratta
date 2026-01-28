@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Seed Test Data</h3>
+      <div class="text-muted">Temporary: creates sample employees and transactions</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post" action="/admin/seed/run">
+        <div class="mb-3">
+          <label class="form-label">Seed Token</label>
+          <input class="form-control" name="token" placeholder="Enter SEED_TOKEN" />
+        </div>
+        <button class="btn btn-primary" type="submit">Create Test Data</button>
+      </form>
+      <div class="form-text mt-3">
+        Requires env: ENABLE_SEED=1 and SEED_TOKEN.
+      </div>
+    </div>
+  </div>
+{% endblock %}

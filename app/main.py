@@ -558,6 +558,117 @@ def logout(request: Request):
     return RedirectResponse(url="/login", status_code=303)
 
 
+def _seed_is_enabled() -> bool:
+    return (os.getenv("ENABLE_SEED") or "").strip() == "1"
+
+
+def _require_seed_token(token: str | None) -> None:
+    if not _seed_is_enabled():
+        raise HTTPException(status_code=404, detail="Not found")
+    expected = (os.getenv("SEED_TOKEN") or "").strip()
+    if not expected:
+        raise HTTPException(status_code=500, detail="SEED_TOKEN is not configured")
+    if (token or "").strip() != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+@app.get("/admin/seed", response_class=HTMLResponse)
+def admin_seed(request: Request):
+    if not _seed_is_enabled():
+        raise HTTPException(status_code=404, detail="Not found")
+    ctx = common_context(request)
+    return TEMPLATES.TemplateResponse("admin_seed.html", ctx)
+
+
+@app.post("/admin/seed/run", response_class=HTMLResponse)
+def admin_seed_run(request: Request, db: Session = Depends(get_db), token: str | None = Form(None)):
+    _require_seed_token(token)
+
+    marker = "seed_v1"
+    created_employees: list[str] = []
+    created_transactions = 0
+
+    seed_employees = [
+        {"full_name": "Murtaza", "category": "Supervisor / Office Staff", "work_type": "contract"},
+        {"full_name": "Waseem", "category": "Polish Worker", "work_type": "daily"},
+        {"full_name": "Razaq", "category": "Upholstery / Poshish Worker", "work_type": "daily"},
+        {"full_name": "Yaseen", "category": "Helper / Mazdoor", "work_type": "daily"},
+    ]
+
+    by_name: dict[str, Employee] = {}
+    for e in seed_employees:
+        name = e["full_name"]
+        emp = db.execute(select(Employee).where(Employee.full_name.ilike(name))).scalar_one_or_none()
+        if not emp:
+            emp = crud.create_employee(
+                db,
+                full_name=name,
+                father_name=None,
+                cnic=None,
+                mobile_number=None,
+                address=None,
+                emergency_contact=None,
+                joining_date=dt.date.today(),
+                status="active",
+                category=e["category"],
+                work_type=e["work_type"],
+                role_description=None,
+                payment_rate=None,
+                profile_image_url="",
+            )
+            created_employees.append(name)
+        by_name[name.lower()] = emp
+
+    existing_seed = db.execute(
+        select(func.count(Transaction.id))
+        .where(Transaction.is_deleted.is_(False))
+        .where(Transaction.reference == marker)
+    ).scalar_one()
+    if int(existing_seed or 0) == 0:
+        today = dt.date.today()
+
+        crud.create_transaction(
+            db,
+            type="incoming",
+            date=today,
+            amount_pkr=250000,
+            category=INCOMING_CATEGORIES[0],
+            name="Customer",
+            bill_no="SEED-1",
+            notes="seed",
+            reference=marker,
+        )
+        created_transactions += 1
+
+        for nm, amt, cat, tx_type in [
+            ("waseem", 9000, "Polish Wala", "salary"),
+            ("razaq", 7000, "Poshish Wala", "salary"),
+            ("yaseen", 1500, "Employee", "advance"),
+        ]:
+            emp = by_name.get(nm)
+            crud.create_transaction(
+                db,
+                type="outgoing",
+                date=today,
+                amount_pkr=int(amt),
+                category=cat,
+                name=emp.full_name if emp else nm,
+                bill_no=None,
+                notes="seed",
+                employee_id=emp.id if emp else None,
+                employee_tx_type=tx_type,
+                payment_method=PAYMENT_METHODS[0] if PAYMENT_METHODS else None,
+                reference=marker,
+            )
+            created_transactions += 1
+
+    _backfill_employees_from_transactions(db)
+
+    ctx = common_context(request)
+    ctx.update({"created_employees": created_employees, "created_transactions": created_transactions, "marker": marker})
+    return TEMPLATES.TemplateResponse("admin_seed_result.html", ctx)
+
+
 @app.get("/admin/tx-names-debug", response_class=HTMLResponse)
 def tx_names_debug(request: Request, db: Session = Depends(get_db)):
     # Show all distinct transaction names and categories

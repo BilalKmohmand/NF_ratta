@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Seed Test Data</h3>
+      <div class="text-muted">Completed</div>
+    </div>
+    <div>
+      <a class="btn btn-outline-secondary" href="/employees">Employees</a>
+      <a class="btn btn-outline-secondary" href="/transactions">Transactions</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <p class="mb-2"><strong>Marker:</strong> {{ marker }}</p>
+      <p class="mb-2"><strong>Employees created:</strong> {{ created_employees|length }}</p>
+      {% if created_employees %}
+        <ul class="mb-3">
+          {% for n in created_employees %}<li>{{ n }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+      <p class="mb-0"><strong>Transactions created:</strong> {{ created_transactions }}</p>
+    </div>
+  </div>
+{% endblock %}
