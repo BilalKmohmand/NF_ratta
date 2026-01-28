@@ -527,6 +527,100 @@ def logout(request: Request):
     return RedirectResponse(url="/login", status_code=303)
 
 
+@app.get("/admin/sync-employees-from-transactions", response_class=HTMLResponse)
+def sync_employees_from_transactions(request: Request, db: Session = Depends(get_db)):
+    stmt = select(Transaction.name, Transaction.category).where(Transaction.is_deleted.is_(False)).where(Transaction.name.is_not(None)).distinct()
+    rows = db.execute(stmt).all()
+
+    created = []
+    linked = 0
+    for name, category in rows:
+        if not name or not name.strip():
+            continue
+        name = name.strip()
+
+        # Special case: ensure two distinct employees for Murtaza if both categories exist
+        if name.lower() == "murtaza" and category in {"Employee", "Karkhanay Wala"}:
+            # Try to find existing employee with matching name and category mapping
+            emp = None
+            existing = db.execute(select(Employee).where(Employee.full_name.ilike(name))).scalars().all()
+            for e in existing:
+                emp_cat = _employee_outgoing_category(e)
+                if emp_cat == category:
+                    emp = e
+                    break
+            if not emp:
+                emp = crud.create_employee(
+                    db,
+                    full_name=name,
+                    father_name=None,
+                    cnic=None,
+                    mobile_number=None,
+                    address=None,
+                    emergency_contact=None,
+                    joining_date=dt.date.today(),
+                    status="active",
+                    category=_map_category_to_employee_category(category),
+                    work_type="daily",
+                    role_description=None,
+                    payment_rate=None,
+                    profile_image_url=None,
+                )
+                created.append(f"{name} ({category})")
+        else:
+            # General case: one employee per name
+            emp = db.execute(select(Employee).where(Employee.full_name.ilike(name))).scalar_one_or_none()
+            if not emp:
+                emp = crud.create_employee(
+                    db,
+                    full_name=name,
+                    father_name=None,
+                    cnic=None,
+                    mobile_number=None,
+                    address=None,
+                    emergency_contact=None,
+                    joining_date=dt.date.today(),
+                    status="active",
+                    category=_map_category_to_employee_category(category),
+                    work_type="daily",
+                    role_description=None,
+                    payment_rate=None,
+                    profile_image_url=None,
+                )
+                created.append(name)
+
+        # Link all transactions for this name+category to the employee
+        txs = db.execute(
+            select(Transaction)
+            .where(Transaction.is_deleted.is_(False))
+            .where(Transaction.name.ilike(name))
+            .where(Transaction.category == category)
+            .where(Transaction.employee_id.is_(None))
+        ).scalars().all()
+        for tx in txs:
+            tx.employee_id = emp.id
+            if not tx.employee_tx_type:
+                tx.employee_tx_type = "salary"
+        linked += len(txs)
+
+    db.commit()
+    ctx = common_context(request)
+    ctx.update({"created": created, "linked": linked})
+    return TEMPLATES.TemplateResponse("admin_sync_result.html", ctx)
+
+
+def _map_category_to_employee_category(tx_category: str) -> str:
+    """Map outgoing transaction category to an employee profile category."""
+    cat = tx_category.lower()
+    if "karkhan" in cat or "factory" in cat:
+        return "Factory Worker (Karkhanay Wala)"
+    if "polish" in cat:
+        return "Polish Worker"
+    if "poshish" in cat or "upholstery" in cat:
+        return "Upholstery / Poshish Worker"
+    return "Helper / Mazdoor"
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     ctx = common_context(request)

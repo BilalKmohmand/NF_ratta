@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Sync Employees from Transactions</h3>
+      <div class="text-muted">One‑time sync completed</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/employees">Employees</a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      {% if created %}
+        <h6 class="mb-3">Employees Created</h6>
+        <ul class="mb-4">
+          {% for name in created %}
+            <li>{{ name }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      <h6 class="mb-3">Transactions Linked</h6>
+      <p class="mb-0"><strong>{{ linked }}</strong> transactions were linked to employees.</p>
+    </div>
+  </div>
+{% endblock %}
