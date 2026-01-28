@@ -11,6 +11,10 @@
 
   <div class="card">
     <div class="card-body">
+      {% if debug_rows %}
+        <h6 class="mb-3">Debug: Distinct Transaction Names & Categories</h6>
+        <pre class="bg-light p-2 rounded mb-4" style="font-size:0.875rem;">{{ debug_rows }}</pre>
+      {% endif %}
       {% if created %}
         <h6 class="mb-3">Employees Created</h6>
         <ul class="mb-4">
@@ -18,6 +22,8 @@
             <li>{{ name }}</li>
           {% endfor %}
         </ul>
+      {% else %}
+        <p class="mb-4 text-muted">No new employees were created.</p>
       {% endif %}
       <h6 class="mb-3">Transactions Linked</h6>
       <p class="mb-0"><strong>{{ linked }}</strong> transactions were linked to employees.</p>
