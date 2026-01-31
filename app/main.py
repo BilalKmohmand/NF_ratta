@@ -5,8 +5,10 @@ import datetime as dt
 import io
 import os
 import base64
+from typing import TYPE_CHECKING
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -142,7 +144,10 @@ def get_db():
 def on_startup() -> None:
     auto_create = os.getenv("AUTO_CREATE_DB")
     if IS_SQLITE or (auto_create is not None and auto_create.strip() == "1"):
-        Base.metadata.create_all(bind=engine)
+        try:
+            Base.metadata.create_all(bind=engine)
+        except Exception:
+            return
 
         if not IS_SQLITE:
             try:
@@ -1551,7 +1556,12 @@ def reports(
     return TEMPLATES.TemplateResponse("reports.html", ctx)
 
 
-def to_dataframe(items: list[Transaction]) -> pd.DataFrame:
+def to_dataframe(items: list[Transaction]):
+    try:
+        import pandas as pd
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export requires pandas. Install pandas or disable export. ({e})")
+
     rows = []
     for t in items:
         rows.append(
