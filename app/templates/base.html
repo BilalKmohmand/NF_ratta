@@ -37,10 +37,12 @@
                 <li class="nav-item"><a class="nav-link" href="/employees">Employees</a></li>
                 {% if not request.url.path.startswith('/employees') %}
                   <li class="nav-item"><a class="nav-link" href="/inventory">Inventory</a></li>
-                  <li class="nav-item"><a class="nav-link" href="/daily">Daily Dashboard</a></li>
-                  <li class="nav-item"><a class="nav-link" href="/reports">Reports</a></li>
-                  <li class="nav-item"><a class="nav-link" href="/analytics">Analytics</a></li>
-                  <li class="nav-item"><a class="nav-link" href="/transactions">Transactions</a></li>
+                  {% if not request.url.path.startswith('/inventory') %}
+                    <li class="nav-item"><a class="nav-link" href="/daily">Daily Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/reports">Reports</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/analytics">Analytics</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/transactions">Transactions</a></li>
+                  {% endif %}
                 {% endif %}
               {% endif %}
             {% endif %}
