@@ -57,6 +57,10 @@ body.ready .page {
   transform: translateY(0);
 }
 
+body.modal-open .page {
+  transform: none !important;
+}
+
 @keyframes floaty {
   0% { transform: translate3d(0, 0, 0); }
   50% { transform: translate3d(0, -10px, 0); }
@@ -285,6 +289,14 @@ body.ready .page {
   transform: translateY(-2px);
   box-shadow: 0 16px 40px rgba(0,0,0,0.10);
 }
+
+body.modal-open .card:hover,
+body.modal-open .btn:hover {
+  transform: none !important;
+}
+
+.modal { z-index: 1055; }
+.modal-backdrop { z-index: 1050; }
 
 .btn:hover {
   transform: translateY(-1px);
