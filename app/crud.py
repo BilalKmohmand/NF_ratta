@@ -414,6 +414,7 @@ def ensure_inventory_seed(db: Session) -> None:
     poshish_cat = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Poshish Materials")
     kapra_cat = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Kapra")
     polish_cat = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Polish Materials")
+    wood_cat = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Wood")
 
     for name in [
         "Single Bed",
@@ -427,6 +428,7 @@ def ensure_inventory_seed(db: Session) -> None:
         poshish_cat.name,
         kapra_cat.name,
         polish_cat.name,
+        wood_cat.name,
     ]:
         _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name=name)
 
@@ -499,6 +501,19 @@ def ensure_inventory_seed(db: Session) -> None:
         "Other",
     ]:
         _upsert_category(db, type="FURNITURE", parent_id=kapra_cat.id, name=name)
+
+    for name in [
+        "Tahli",
+        "Deodar",
+        "Kail",
+        "MDF",
+        "Plywood",
+        "Particle Board",
+        "Veneer",
+        "Lamination / Sunmica",
+        "Other",
+    ]:
+        _upsert_category(db, type="FURNITURE", parent_id=wood_cat.id, name=name)
 
     _upsert_category(db, type="FOAM", parent_id=foam_root.id, name="Mattress / Foam Inventory")
 

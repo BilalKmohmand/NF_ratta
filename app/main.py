@@ -1013,6 +1013,7 @@ def inventory_furniture(
         "Poshish Materials",
         "Kapra",
         "Polish Materials",
+        "Wood",
     }
     categories = [c for c in categories if (c.name or "") in allowed_types]
 
