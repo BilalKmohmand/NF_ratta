@@ -409,6 +409,12 @@ def ensure_inventory_seed(db: Session) -> None:
 
     bed_sets = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Bed Set")
 
+    sofa_cat = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Sofa")
+    hardware_cat = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Hardware")
+    poshish_cat = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Poshish Materials")
+    kapra_cat = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Kapra")
+    polish_cat = _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name="Polish Materials")
+
     for name in [
         "Single Bed",
         "Double Bed",
@@ -416,15 +422,83 @@ def ensure_inventory_seed(db: Session) -> None:
         "Showcase",
         "Side Table",
         "Dressing Table",
-        "Sofa",
-        "Hardware",
-        "Poshish Materials",
-        "Kapra",
+        sofa_cat.name,
+        hardware_cat.name,
+        poshish_cat.name,
+        kapra_cat.name,
+        polish_cat.name,
     ]:
         _upsert_category(db, type="FURNITURE", parent_id=furniture_root.id, name=name)
 
     for name in ["Cushion Bed Set", "Tahli Bed Set", "Kicker + V-Board", "Other"]:
         _upsert_category(db, type="FURNITURE", parent_id=bed_sets.id, name=name)
+
+    for name in [
+        "Single Seater",
+        "2 Seater",
+        "3 Seater",
+        "L-Shaped",
+        "Corner Sofa",
+        "Sofa Cum Bed",
+        "Deewan",
+        "Recliner",
+        "Other",
+    ]:
+        _upsert_category(db, type="FURNITURE", parent_id=sofa_cat.id, name=name)
+
+    for name in [
+        "Hinges",
+        "Handles",
+        "Locks",
+        "Nails",
+        "Screws",
+        "Brackets",
+        "Drawer Slides",
+        "Latches",
+        "Glue",
+        "Other",
+    ]:
+        _upsert_category(db, type="FURNITURE", parent_id=hardware_cat.id, name=name)
+
+    for name in [
+        "Foam Sheet",
+        "Cushion",
+        "Cotton",
+        "Fiber",
+        "Webbing / Belt",
+        "Elastic",
+        "Buttons",
+        "Zips",
+        "Thread",
+        "Staples",
+        "Other",
+    ]:
+        _upsert_category(db, type="FURNITURE", parent_id=poshish_cat.id, name=name)
+
+    for name in [
+        "Thinner",
+        "Lacquer",
+        "Sealer",
+        "Hardener",
+        "Sandpaper",
+        "Stain",
+        "Paint",
+        "Primer",
+        "Polish",
+        "Other",
+    ]:
+        _upsert_category(db, type="FURNITURE", parent_id=polish_cat.id, name=name)
+
+    for name in [
+        "Velvet",
+        "Leatherette",
+        "Cotton",
+        "Jute",
+        "Linen",
+        "Jacquard",
+        "Other",
+    ]:
+        _upsert_category(db, type="FURNITURE", parent_id=kapra_cat.id, name=name)
 
     _upsert_category(db, type="FOAM", parent_id=foam_root.id, name="Mattress / Foam Inventory")
 
@@ -602,6 +676,14 @@ def get_inventory_category(db: Session, *, type: str, name: str, parent_id: int 
     else:
         stmt = stmt.where(InventoryCategory.parent_id == parent_id)
     return db.execute(stmt).scalar_one_or_none()
+
+
+def get_inventory_category_by_id(db: Session, *, category_id: int) -> InventoryCategory | None:
+    stmt = select(InventoryCategory).where(
+        InventoryCategory.is_active.is_(True),
+        InventoryCategory.id == category_id,
+    )
+    return db.execute(stmt).scalars().first()
 
 
 def _recompute_furniture_item_status(db: Session, *, furniture_item_id: int) -> None:

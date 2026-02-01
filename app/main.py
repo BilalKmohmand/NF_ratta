@@ -1012,6 +1012,7 @@ def inventory_furniture(
         "Hardware",
         "Poshish Materials",
         "Kapra",
+        "Polish Materials",
     }
     categories = [c for c in categories if (c.name or "") in allowed_types]
 
@@ -1020,18 +1021,23 @@ def inventory_furniture(
     allowed_subtypes = {"Cushion Bed Set", "Tahli Bed Set", "Kicker + V-Board", "Other"}
     bed_set_subtypes = [s for s in bed_set_subtypes if (s.name or "") in allowed_subtypes]
 
+    sub_categories: list[object] = []
+    for c in categories:
+        sub_categories.extend(crud.list_inventory_categories(db, type="FURNITURE", parent_id=c.id))
+
     bed_sizes = crud.list_bed_sizes(db)
     items = crud.list_furniture_items_filtered(db, q=q, category_id=category_id, limit=200)
     cards = crud.furniture_cards(db, items=items)
 
     type_by_id = {c.id: c for c in categories}
-    subtype_by_id = {s.id: s for s in bed_set_subtypes}
+    subtype_by_id = {s.id: s for s in sub_categories}
 
     ctx = common_context(request)
     ctx.update(
         {
             "categories": categories,
             "bed_set_subtypes": bed_set_subtypes,
+            "sub_categories": sub_categories,
             "bed_set_category_id": bed_set_cat.id if bed_set_cat else None,
             "type_by_id": type_by_id,
             "subtype_by_id": subtype_by_id,
@@ -1089,7 +1095,13 @@ def inventory_furniture_post(
     chosen_sub_category_id: int | None = None
     sub_category_id_clean = (sub_category_id or "").strip()
     if sub_category_id_clean.isdigit():
-        chosen_sub_category_id = int(sub_category_id_clean)
+        candidate = crud.get_inventory_category_by_id(db, category_id=int(sub_category_id_clean))
+        if not candidate:
+            errors["sub_category_id"] = "Invalid sub-category."
+        elif chosen_category_id and candidate.parent_id != int(chosen_category_id):
+            errors["sub_category_id"] = "Sub-category does not belong to selected category."
+        else:
+            chosen_sub_category_id = int(sub_category_id_clean)
     elif (sub_category_name or "").strip():
         if not chosen_category_id:
             errors["sub_category_id"] = "Select a category first."
@@ -1102,9 +1114,32 @@ def inventory_furniture_post(
 
     if errors:
         categories = crud.list_inventory_categories(db, type="FURNITURE", parent_id=(furniture_root.id if furniture_root else None)) if furniture_root else []
+        allowed_types = {
+            "Bed Set",
+            "Single Bed",
+            "Double Bed",
+            "Almari",
+            "Showcase",
+            "Side Table",
+            "Dressing Table",
+            "Sofa",
+            "Hardware",
+            "Poshish Materials",
+            "Kapra",
+            "Polish Materials",
+        }
+        categories = [c for c in categories if (c.name or "") in allowed_types]
+
         bed_set_subtypes = crud.list_inventory_categories(db, type="FURNITURE", parent_id=bed_set_cat.id) if bed_set_cat else []
+        allowed_subtypes = {"Cushion Bed Set", "Tahli Bed Set", "Kicker + V-Board", "Other"}
+        bed_set_subtypes = [s for s in bed_set_subtypes if (s.name or "") in allowed_subtypes]
+
+        sub_categories: list[object] = []
+        for c in categories:
+            sub_categories.extend(crud.list_inventory_categories(db, type="FURNITURE", parent_id=c.id))
+
         type_by_id = {c.id: c for c in categories}
-        subtype_by_id = {s.id: s for s in bed_set_subtypes}
+        subtype_by_id = {s.id: s for s in sub_categories}
         bed_sizes = crud.list_bed_sizes(db)
         items = crud.list_furniture_items_filtered(db, q=None, category_id=None, limit=200)
         cards = crud.furniture_cards(db, items=items)
@@ -1113,6 +1148,7 @@ def inventory_furniture_post(
             {
                 "categories": categories,
                 "bed_set_subtypes": bed_set_subtypes,
+                "sub_categories": sub_categories,
                 "bed_set_category_id": bed_set_cat.id if bed_set_cat else None,
                 "type_by_id": type_by_id,
                 "subtype_by_id": subtype_by_id,

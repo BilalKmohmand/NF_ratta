@@ -120,15 +120,16 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <form id="addFurnitureForm" method="post" action="/inventory/furniture" class="row g-2">
+          <form id="addFurnitureForm" method="post" action="/inventory/furniture" class="row g-3">
             <div class="col-12">
-              <label class="form-label">Name</label>
-              <input class="form-control" name="name" placeholder="e.g., King Size Bed Set" />
+              <label class="form-label">Item Name</label>
+              <input class="form-control" name="name" placeholder="e.g., Modern 3 Seater Sofa" />
               {% if errors.name %}<div class="text-danger small mt-1">{{ errors.name }}</div>{% endif %}
             </div>
-            <div class="col-12">
+
+            <div class="col-12 col-md-6">
               <label class="form-label">Category</label>
-              <select class="form-select" name="category_id">
+              <select class="form-select" name="category_id" id="invCategorySelect">
                 <option value="">Select category</option>
                 {% for c in categories %}
                   <option value="{{ c.id }}">{{ c.name }}</option>
@@ -136,29 +137,28 @@
               </select>
               {% if errors.category_id %}<div class="text-danger small mt-1">{{ errors.category_id }}</div>{% endif %}
             </div>
-            <div class="col-12">
-              <label class="form-label">Or add new category</label>
-              <input class="form-control" name="category_name" placeholder="e.g., Center Table" />
-            </div>
-            <div class="col-12">
-              <label class="form-label">Bed Set Sub-Type (only if Bed Set)</label>
-              <select class="form-select" name="sub_category_id">
-                <option value="">Select sub-type</option>
-                {% for s in bed_set_subtypes %}
-                  <option value="{{ s.id }}">{{ s.name }}</option>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label">Sub-Category / Variety</label>
+              <select class="form-select" name="sub_category_id" id="invSubCategorySelect">
+                <option value="">Select sub-category (optional)</option>
+                {% for s in sub_categories %}
+                  <option value="{{ s.id }}" data-parent="{{ s.parent_id }}">{{ s.name }}</option>
                 {% endfor %}
               </select>
               {% if errors.sub_category_id %}<div class="text-danger small mt-1">{{ errors.sub_category_id }}</div>{% endif %}
             </div>
-            <div class="col-12">
-              <label class="form-label">Or add new sub-type</label>
-              <input class="form-control" name="sub_category_name" placeholder="e.g., Luxury Cushion" />
-            </div>
+
             <div class="col-12 col-md-6">
-              <label class="form-label">SKU</label>
-              <input class="form-control" name="sku" placeholder="Optional code" />
-              {% if errors.sku %}<div class="text-danger small mt-1">{{ errors.sku }}</div>{% endif %}
+              <label class="form-label">Or add new category</label>
+              <input class="form-control" name="category_name" placeholder="e.g., Center Table" />
             </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label">Or add new sub-category</label>
+              <input class="form-control" name="sub_category_name" placeholder="e.g., L-Shaped" />
+            </div>
+
             <div class="col-12 col-md-6">
               <label class="form-label">Status</label>
               <select class="form-select" name="status">
@@ -168,6 +168,13 @@
               </select>
               {% if errors.status %}<div class="text-danger small mt-1">{{ errors.status }}</div>{% endif %}
             </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label">SKU (Optional)</label>
+              <input class="form-control" name="sku" placeholder="Auto-generated if empty" />
+              {% if errors.sku %}<div class="text-danger small mt-1">{{ errors.sku }}</div>{% endif %}
+            </div>
+
             <div class="col-12 col-md-6">
               <label class="form-label">Material Type</label>
               <select class="form-select" name="material_type">
@@ -177,12 +184,14 @@
                 <option value="Mix">Mix</option>
               </select>
             </div>
+
             <div class="col-12 col-md-6">
               <label class="form-label">Color / Finish</label>
               <input class="form-control" name="color_finish" placeholder="Optional" />
             </div>
+
             <div class="col-12">
-              <label class="form-label">Notes (Optional)</label>
+              <label class="form-label">Notes</label>
               <input class="form-control" name="notes" placeholder="Optional" />
             </div>
           </form>
@@ -194,4 +203,31 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      const cat = document.getElementById('invCategorySelect');
+      const sub = document.getElementById('invSubCategorySelect');
+      if (!cat || !sub) return;
+
+      function applyFilter() {
+        const parent = (cat.value || '').toString();
+        const options = sub.querySelectorAll('option[data-parent]');
+        options.forEach(function (opt) {
+          const p = (opt.getAttribute('data-parent') || '').toString();
+          opt.hidden = !!parent && p !== parent;
+        });
+
+        const selected = sub.options[sub.selectedIndex];
+        if (selected && selected.hidden) {
+          sub.value = '';
+        }
+      }
+
+      cat.addEventListener('change', applyFilter);
+      applyFilter();
+    })();
+  </script>
 {% endblock %}
