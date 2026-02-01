@@ -25,6 +25,43 @@ body {
   border-bottom: 1px solid color-mix(in srgb, var(--bs-border-color) 65%, transparent);
 }
 
+.inventory-topnav {
+  padding: 0.25rem;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+  background: color-mix(in srgb, var(--bs-body-bg) 86%, transparent);
+}
+
+.inventory-topnav .nav-link {
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.btn-accent {
+  --bs-btn-bg: #b55a24;
+  --bs-btn-border-color: #b55a24;
+  --bs-btn-hover-bg: #a4501f;
+  --bs-btn-hover-border-color: #a4501f;
+  --bs-btn-active-bg: #93481c;
+  --bs-btn-active-border-color: #93481c;
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-color: #fff;
+}
+
+.modal-content {
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+}
+
+.modal-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+}
+
+.modal-footer {
+  border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+}
+
 .navbar-glass .nav-link { font-weight: 600; }
 
 .card {
