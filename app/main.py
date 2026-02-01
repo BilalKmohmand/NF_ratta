@@ -1050,8 +1050,10 @@ def inventory_furniture_post(
     errors: dict[str, str] = {}
     if not name.strip():
         errors["name"] = "Item name is required."
-    if not sku.strip():
-        errors["sku"] = "SKU is required."
+
+    sku_clean = (sku or "").strip()
+    if not sku_clean:
+        sku_clean = f"FUR-{dt.datetime.now().strftime('%Y%m%d%H%M%S')}"
     if status not in {"IN_STOCK", "OUT_OF_STOCK", "MADE_TO_ORDER"}:
         errors["status"] = "Invalid status."
 
@@ -1086,7 +1088,7 @@ def inventory_furniture_post(
     item = crud.create_furniture_item(
         db,
         name=name.strip(),
-        sku=sku.strip(),
+        sku=sku_clean,
         material_type=material_type.strip() or "Wood",
         color_finish=(color_finish or "").strip() or None,
         status=status,
