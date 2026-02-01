@@ -103,7 +103,7 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <form method="post" action="/inventory/foam/models" class="row g-2">
+          <form id="addFoamForm" method="post" action="/inventory/foam/models" class="row g-2">
             <div class="col-12">
               <label class="form-label">Brand</label>
               <select class="form-select" name="brand_id">
@@ -121,11 +121,11 @@
               <label class="form-label">Notes</label>
               <input class="form-control" name="notes" placeholder="Optional" />
             </div>
-            <div class="col-12">
-              <button class="btn btn-primary" type="submit">Save</button>
-              <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
-            </div>
           </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary" type="submit" form="addFoamForm">Save</button>
         </div>
       </div>
     </div>
