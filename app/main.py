@@ -215,6 +215,225 @@ def common_context(request: Request):
     }
 
 
+@app.get("/clients", response_class=HTMLResponse)
+def clients_index(request: Request, db: Session = Depends(get_db), q: str | None = None):
+    items = crud.list_clients(db, q=q)
+    ctx = common_context(request)
+    ctx.update({"items": items, "q": q or ""})
+    return TEMPLATES.TemplateResponse("clients.html", ctx)
+
+
+@app.post("/clients/new", response_class=HTMLResponse)
+def clients_new_post(
+    request: Request,
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+    phone: str = Form(...),
+    address: str | None = Form(None),
+    notes: str | None = Form(None),
+):
+    if not name.strip() or not phone.strip():
+        return RedirectResponse(url="/clients", status_code=303)
+    crud.create_client(db, name=name.strip(), phone=phone.strip(), address=address, notes=notes)
+    return RedirectResponse(url="/clients", status_code=303)
+
+
+@app.get("/clients/{client_id}", response_class=HTMLResponse)
+def client_detail(request: Request, client_id: int, db: Session = Depends(get_db)):
+    c = crud.get_client(db, client_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    bills = crud.list_bills_for_client(db, client_id=client_id)
+    ctx = common_context(request)
+    ctx.update({"client": c, "bills": bills})
+    return TEMPLATES.TemplateResponse("client_detail.html", ctx)
+
+
+@app.get("/bills", response_class=HTMLResponse)
+def bills_index(request: Request, db: Session = Depends(get_db), q: str | None = None, status: str | None = None):
+    items = crud.list_bills(db, q=q, status=status)
+    ctx = common_context(request)
+    ctx.update({"items": items, "q": q or "", "status": status or ""})
+    return TEMPLATES.TemplateResponse("bills.html", ctx)
+
+
+@app.get("/bills/new", response_class=HTMLResponse)
+def bills_new(request: Request, db: Session = Depends(get_db), client_id: int | None = None):
+    ctx = common_context(request)
+    ctx.update(
+        {
+            "clients": crud.list_clients(db, limit=500),
+            "next_bill_no": crud.get_next_bill_no(db),
+            "client_id": int(client_id) if client_id else None,
+        }
+    )
+    return TEMPLATES.TemplateResponse("bill_new.html", ctx)
+
+
+@app.post("/bills/new", response_class=HTMLResponse)
+def bills_new_post(
+    request: Request,
+    db: Session = Depends(get_db),
+    bill_no: int = Form(...),
+    date: str = Form(...),
+    client_id: str | None = Form(None),
+    customer_name: str = Form(...),
+    customer_phone: str | None = Form(None),
+    customer_address: str | None = Form(None),
+    discount_pkr: int = Form(0),
+    paid_amount_pkr: int = Form(0),
+    payment_method: str | None = Form(None),
+    payment_notes: str | None = Form(None),
+    item_description: list[str] = Form(...),
+    item_quantity: list[int] = Form(...),
+    item_rate_pkr: list[int] = Form(...),
+):
+    parsed_date = parse_date(date) or dt.date.today()
+
+    parsed_client_id: int | None = None
+    try:
+        if client_id is not None and str(client_id).strip():
+            parsed_client_id = int(str(client_id).strip())
+    except Exception:
+        parsed_client_id = None
+
+    descs = [d.strip() for d in (item_description or []) if (d or "").strip()]
+    qtys = list(item_quantity or [])
+    rates = list(item_rate_pkr or [])
+    if not descs:
+        raise HTTPException(status_code=400, detail="At least one item is required")
+
+    subtotal = 0
+    for idx, d in enumerate(descs):
+        qty = int(qtys[idx]) if idx < len(qtys) else 1
+        rate = int(rates[idx]) if idx < len(rates) else 0
+        qty = max(1, qty)
+        rate = max(0, rate)
+        subtotal += qty * rate
+
+    discount = max(0, int(discount_pkr or 0))
+    grand_total = max(0, subtotal - discount)
+    paid = max(0, int(paid_amount_pkr or 0))
+    if paid > grand_total:
+        paid = grand_total
+
+    b = crud.create_bill(
+        db,
+        bill_no=int(bill_no),
+        date=parsed_date,
+        client_id=parsed_client_id,
+        customer_name=customer_name.strip(),
+        customer_phone=customer_phone,
+        customer_address=customer_address,
+        subtotal_pkr=subtotal,
+        discount_pkr=discount,
+        grand_total_pkr=grand_total,
+        paid_amount_pkr=0,
+        payment_method=payment_method,
+        payment_notes=payment_notes,
+    )
+
+    for idx, d in enumerate(descs):
+        qty = int(qtys[idx]) if idx < len(qtys) else 1
+        rate = int(rates[idx]) if idx < len(rates) else 0
+        crud.add_bill_item(db, bill_id=b.id, description=d, quantity=qty, rate_pkr=rate)
+
+    crud.recalc_bill_totals(db, b)
+
+    if paid > 0:
+        crud.create_bill_payment(
+            db,
+            bill_id=b.id,
+            date=parsed_date,
+            amount_pkr=paid,
+            payment_method=payment_method or "Cash",
+            notes=(payment_notes or f"Initial payment for Bill #{b.bill_no}"),
+        )
+        crud.create_transaction(
+            db,
+            type="incoming",
+            date=parsed_date,
+            amount_pkr=int(paid),
+            category="Client",
+            name=b.customer_name,
+            bill_no=str(b.bill_no),
+            notes="Bill payment",
+        )
+
+    return RedirectResponse(url=f"/bills/{b.id}", status_code=303)
+
+
+@app.get("/bills/{bill_id}", response_class=HTMLResponse)
+def bill_detail(request: Request, bill_id: int, db: Session = Depends(get_db)):
+    b = crud.get_bill(db, bill_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    items = crud.list_bill_items(db, bill_id=bill_id)
+    payments = crud.list_bill_payments(db, bill_id=bill_id)
+    ctx = common_context(request)
+    ctx.update({"bill": b, "items": items, "payments": payments})
+    return TEMPLATES.TemplateResponse("bill_detail.html", ctx)
+
+
+@app.post("/bills/{bill_id}/payment", response_class=HTMLResponse)
+def bill_add_payment(
+    request: Request,
+    bill_id: int,
+    db: Session = Depends(get_db),
+    date: str = Form(...),
+    amount_pkr: int = Form(...),
+    payment_method: str = Form("Cash"),
+    notes: str | None = Form(None),
+):
+    b = crud.get_bill(db, bill_id)
+    if not b:
+        raise HTTPException(status_code=404, detail="Bill not found")
+
+    parsed_date = parse_date(date) or dt.date.today()
+    try:
+        crud.create_bill_payment(
+            db,
+            bill_id=bill_id,
+            date=parsed_date,
+            amount_pkr=int(amount_pkr),
+            payment_method=payment_method,
+            notes=notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    crud.create_transaction(
+        db,
+        type="incoming",
+        date=parsed_date,
+        amount_pkr=int(amount_pkr),
+        category="Client",
+        name=b.customer_name,
+        bill_no=str(b.bill_no),
+        notes="Bill payment",
+    )
+    return RedirectResponse(url=f"/bills/{bill_id}", status_code=303)
+
+
+@app.get("/pending-bills", response_class=HTMLResponse)
+def pending_bills(request: Request, db: Session = Depends(get_db), q: str | None = None):
+    items = crud.list_pending_bills(db, q=q)
+    total_due = sum(int(b.balance_pkr or 0) for b in items)
+    pending_count = sum(1 for b in items if b.status == "Pending")
+    partial_count = sum(1 for b in items if b.status == "Partial")
+    ctx = common_context(request)
+    ctx.update(
+        {
+            "items": items,
+            "q": q or "",
+            "total_due": total_due,
+            "pending_count": pending_count,
+            "partial_count": partial_count,
+        }
+    )
+    return TEMPLATES.TemplateResponse("pending_bills.html", ctx)
+
+
 @app.get("/employees", response_class=HTMLResponse)
 def employees(request: Request, db: Session = Depends(get_db), status: str | None = None):
     _backfill_employees_from_transactions(db)

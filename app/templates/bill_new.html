@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">New Bill</h3>
+      <div class="text-muted">Create bill and optionally add initial payment</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/bills">Back</a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post" action="/bills/new">
+        <div class="row g-3">
+          <div class="col-12 col-md-3">
+            <label class="form-label">Bill #</label>
+            <input class="form-control" type="number" name="bill_no" value="{{ next_bill_no }}" required />
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Date</label>
+            <input class="form-control" type="date" name="date" value="{{ today }}" required />
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label">Client (optional)</label>
+            <select class="form-select" name="client_id">
+              <option value="">None</option>
+              {% for c in clients %}
+                <option value="{{ c.id }}" {% if client_id and c.id == client_id %}selected{% endif %}>{{ c.name }} ({{ c.phone }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Customer Name</label>
+            <input class="form-control" name="customer_name" required />
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label">Customer Phone</label>
+            <input class="form-control" name="customer_phone" />
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label">Customer Address</label>
+            <input class="form-control" name="customer_address" />
+          </div>
+
+          <div class="col-12">
+            <hr />
+            <h5 class="mb-2">Items</h5>
+            <div class="table-responsive">
+              <table class="table table-sm mb-0" id="itemsTable">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th style="width: 120px;">Qty</th>
+                    <th style="width: 180px;">Rate (PKR)</th>
+                    <th style="width: 140px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input class="form-control" name="item_description" required /></td>
+                    <td><input class="form-control" type="number" min="1" step="1" name="item_quantity" value="1" required /></td>
+                    <td><input class="form-control" type="number" min="0" step="1" name="item_rate_pkr" value="0" required /></td>
+                    <td class="text-end"><button class="btn btn-outline-danger btn-sm" type="button" onclick="removeRow(this)">Remove</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="mt-2">
+              <button class="btn btn-outline-primary btn-sm" type="button" onclick="addRow()">Add Item</button>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-3">
+            <label class="form-label">Discount (PKR)</label>
+            <input class="form-control" type="number" min="0" step="1" name="discount_pkr" value="0" />
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Initial Paid (PKR)</label>
+            <input class="form-control" type="number" min="0" step="1" name="paid_amount_pkr" value="0" />
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Payment Method</label>
+            <select class="form-select" name="payment_method">
+              {% for m in payment_methods %}
+                <option value="{{ m }}">{{ m }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Payment Notes</label>
+            <input class="form-control" name="payment_notes" />
+          </div>
+
+          <div class="col-12 d-flex justify-content-end gap-2">
+            <a class="btn btn-outline-secondary" href="/bills">Cancel</a>
+            <button class="btn btn-success" type="submit">Create Bill</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function addRow() {
+    const tbody = document.querySelector('#itemsTable tbody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="form-control" name="item_description" required /></td>
+      <td><input class="form-control" type="number" min="1" step="1" name="item_quantity" value="1" required /></td>
+      <td><input class="form-control" type="number" min="0" step="1" name="item_rate_pkr" value="0" required /></td>
+      <td class="text-end"><button class="btn btn-outline-danger btn-sm" type="button" onclick="removeRow(this)">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+  function removeRow(btn) {
+    const tbody = document.querySelector('#itemsTable tbody');
+    const rows = tbody ? tbody.querySelectorAll('tr') : [];
+    if (rows.length <= 1) return;
+    const tr = btn.closest('tr');
+    if (tr) tr.remove();
+  }
+</script>
+{% endblock %}

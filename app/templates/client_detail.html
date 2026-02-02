@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Client Details</h3>
+      <div class="text-muted">{{ client.name }} • {{ client.phone }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/clients">Back</a>
+      <a class="btn btn-primary" href="/bills/new?client_id={{ client.id }}">New Bill</a>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-12 col-md-4">
+          <div class="text-muted">Name</div>
+          <div class="fw-semibold">{{ client.name }}</div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="text-muted">Phone</div>
+          <div class="fw-semibold">{{ client.phone }}</div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="text-muted">Address</div>
+          <div class="fw-semibold">{{ client.address or '-' }}</div>
+        </div>
+        <div class="col-12">
+          <div class="text-muted">Notes</div>
+          <div>{{ client.notes or '-' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">Bill History</h5>
+        <a class="btn btn-sm btn-outline-primary" href="/bills?status=&q={{ client.name }}">Search Bills</a>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Bill #</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">Paid</th>
+            <th class="text-end">Balance</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bills %}
+            <tr>
+              <td>{{ b.bill_no }}</td>
+              <td>{{ b.date }}</td>
+              <td>
+                {% if b.status == 'Paid' %}
+                  <span class="badge bg-success">Paid</span>
+                {% elif b.status == 'Partial' %}
+                  <span class="badge bg-warning text-dark">Partial</span>
+                {% else %}
+                  <span class="badge bg-danger">Pending</span>
+                {% endif %}
+              </td>
+              <td class="text-end">{{ pkr_format(b.grand_total_pkr) }}</td>
+              <td class="text-end">{{ pkr_format(b.paid_amount_pkr) }}</td>
+              <td class="text-end">{{ pkr_format(b.balance_pkr) }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" href="/bills/{{ b.id }}">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+          {% if bills|length == 0 %}
+            <tr><td colspan="7" class="text-center text-muted py-4">No bills for this client.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

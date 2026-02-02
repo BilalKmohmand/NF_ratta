@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 
 from .models import (
     BedSize,
+    Bill,
+    BillItem,
+    BillPayment,
+    Client,
     Employee,
     FoamBrand,
     FoamModel,
@@ -22,6 +26,211 @@ from .models import (
     Transaction,
     WeeklyAssignment,
 )
+
+
+def create_client(db: Session, *, name: str, phone: str, address: str | None, notes: str | None) -> Client:
+    c = Client(name=name, phone=phone, address=address or None, notes=notes or None)
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return c
+
+
+def list_clients(db: Session, *, q: str | None = None, limit: int = 500) -> list[Client]:
+    stmt = select(Client).order_by(Client.created_at.desc(), Client.id.desc())
+    if q and q.strip():
+        qq = f"%{q.strip().lower()}%"
+        stmt = stmt.where(or_(func.lower(Client.name).like(qq), func.lower(Client.phone).like(qq)))
+    stmt = stmt.limit(limit)
+    return list(db.execute(stmt).scalars().all())
+
+
+def get_client(db: Session, client_id: int) -> Client | None:
+    return db.execute(select(Client).where(Client.id == client_id)).scalar_one_or_none()
+
+
+def _bill_status(*, grand_total_pkr: int, paid_amount_pkr: int) -> str:
+    if paid_amount_pkr >= grand_total_pkr and grand_total_pkr > 0:
+        return "Paid"
+    if paid_amount_pkr > 0:
+        return "Partial"
+    return "Pending"
+
+
+def get_next_bill_no(db: Session) -> int:
+    max_no = db.execute(select(func.max(Bill.bill_no))).scalar_one_or_none()
+    return int(max_no or 0) + 1
+
+
+def create_bill(
+    db: Session,
+    *,
+    bill_no: int,
+    date: dt.date,
+    client_id: int | None,
+    customer_name: str,
+    customer_phone: str | None,
+    customer_address: str | None,
+    subtotal_pkr: int,
+    discount_pkr: int,
+    grand_total_pkr: int,
+    paid_amount_pkr: int = 0,
+    payment_method: str | None = None,
+    payment_notes: str | None = None,
+) -> Bill:
+    paid_amount_pkr = int(paid_amount_pkr or 0)
+    grand_total_pkr = int(grand_total_pkr or 0)
+    balance = max(0, grand_total_pkr - paid_amount_pkr)
+    status = _bill_status(grand_total_pkr=grand_total_pkr, paid_amount_pkr=paid_amount_pkr)
+
+    b = Bill(
+        bill_no=bill_no,
+        date=date,
+        client_id=client_id,
+        customer_name=customer_name,
+        customer_phone=customer_phone or None,
+        customer_address=customer_address or None,
+        subtotal_pkr=int(subtotal_pkr or 0),
+        discount_pkr=int(discount_pkr or 0),
+        grand_total_pkr=grand_total_pkr,
+        paid_amount_pkr=paid_amount_pkr,
+        balance_pkr=balance,
+        status=status,
+        payment_method=payment_method or None,
+        payment_notes=payment_notes or None,
+    )
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    return b
+
+
+def list_bills(db: Session, *, q: str | None = None, status: str | None = None, limit: int = 500) -> list[Bill]:
+    stmt = select(Bill).order_by(Bill.date.desc(), Bill.bill_no.desc(), Bill.id.desc())
+    if status and status.strip():
+        stmt = stmt.where(Bill.status == status.strip())
+    if q and q.strip():
+        qq = f"%{q.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Bill.customer_name).like(qq),
+                func.lower(func.coalesce(Bill.customer_phone, "")).like(qq),
+                func.lower(func.coalesce(Bill.customer_address, "")).like(qq),
+            )
+        )
+    stmt = stmt.limit(limit)
+    return list(db.execute(stmt).scalars().all())
+
+
+def get_bill(db: Session, bill_id: int) -> Bill | None:
+    return db.execute(select(Bill).where(Bill.id == bill_id)).scalar_one_or_none()
+
+
+def list_bill_items(db: Session, *, bill_id: int) -> list[BillItem]:
+    stmt = select(BillItem).where(BillItem.bill_id == bill_id).order_by(BillItem.id.asc())
+    return list(db.execute(stmt).scalars().all())
+
+
+def list_bill_payments(db: Session, *, bill_id: int) -> list[BillPayment]:
+    stmt = select(BillPayment).where(BillPayment.bill_id == bill_id).order_by(BillPayment.date.desc(), BillPayment.id.desc())
+    return list(db.execute(stmt).scalars().all())
+
+
+def add_bill_item(
+    db: Session,
+    *,
+    bill_id: int,
+    description: str,
+    quantity: int,
+    rate_pkr: int,
+) -> BillItem:
+    qty = max(1, int(quantity or 1))
+    rate = int(rate_pkr or 0)
+    amount = qty * rate
+    it = BillItem(bill_id=bill_id, description=description, quantity=qty, rate_pkr=rate, amount_pkr=amount)
+    db.add(it)
+    db.commit()
+    db.refresh(it)
+    return it
+
+
+def recalc_bill_totals(db: Session, bill: Bill) -> Bill:
+    items = list_bill_items(db, bill_id=bill.id)
+    subtotal = sum(int(i.amount_pkr or 0) for i in items)
+    discount = int(bill.discount_pkr or 0)
+    grand_total = max(0, subtotal - discount)
+    paid = int(bill.paid_amount_pkr or 0)
+    balance = max(0, grand_total - paid)
+    status = _bill_status(grand_total_pkr=grand_total, paid_amount_pkr=paid)
+
+    bill.subtotal_pkr = subtotal
+    bill.grand_total_pkr = grand_total
+    bill.balance_pkr = balance
+    bill.status = status
+    db.add(bill)
+    db.commit()
+    db.refresh(bill)
+    return bill
+
+
+def create_bill_payment(
+    db: Session,
+    *,
+    bill_id: int,
+    date: dt.date,
+    amount_pkr: int,
+    payment_method: str,
+    notes: str | None,
+) -> BillPayment:
+    b = get_bill(db, bill_id)
+    if not b:
+        raise ValueError("Bill not found")
+
+    amt = int(amount_pkr or 0)
+    if amt <= 0:
+        raise ValueError("Amount must be greater than 0")
+
+    p = BillPayment(
+        bill_id=bill_id,
+        date=date,
+        amount_pkr=amt,
+        payment_method=(payment_method or "Cash"),
+        notes=notes or None,
+    )
+    db.add(p)
+
+    b.paid_amount_pkr = int(b.paid_amount_pkr or 0) + amt
+    b.balance_pkr = max(0, int(b.grand_total_pkr or 0) - int(b.paid_amount_pkr or 0))
+    b.status = _bill_status(grand_total_pkr=int(b.grand_total_pkr or 0), paid_amount_pkr=int(b.paid_amount_pkr or 0))
+
+    db.add(b)
+    db.commit()
+    db.refresh(p)
+    return p
+
+
+def list_pending_bills(db: Session, *, q: str | None = None, limit: int = 500) -> list[Bill]:
+    stmt = select(Bill).where(Bill.status != "Paid").order_by(Bill.date.desc(), Bill.bill_no.desc(), Bill.id.desc())
+    if q and q.strip():
+        qq = f"%{q.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Bill.customer_name).like(qq),
+                func.lower(func.coalesce(Bill.customer_phone, "")).like(qq),
+            )
+        )
+    stmt = stmt.limit(limit)
+    return list(db.execute(stmt).scalars().all())
+
+
+def list_bills_for_client(db: Session, *, client_id: int, limit: int = 500) -> list[Bill]:
+    stmt = (
+        select(Bill)
+        .where(Bill.client_id == client_id)
+        .order_by(Bill.date.desc(), Bill.bill_no.desc(), Bill.id.desc())
+        .limit(limit)
+    )
+    return list(db.execute(stmt).scalars().all())
 
 
 def create_transaction(

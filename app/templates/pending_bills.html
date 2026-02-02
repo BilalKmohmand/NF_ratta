@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Pending Bills</h3>
+      <div class="text-muted">Bills that are not fully paid</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/bills">All Bills</a>
+      <a class="btn btn-outline-primary" href="/bills/new">New Bill</a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+      <div class="card card-kpi"><div class="card-body"><div class="text-muted">Total Due</div><div class="fs-4 fw-bold">{{ pkr_format(total_due) }}</div></div></div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card card-kpi"><div class="card-body"><div class="text-muted">Pending (No Payment)</div><div class="fs-4 fw-bold">{{ pending_count }}</div></div></div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card card-kpi"><div class="card-body"><div class="text-muted">Partial Payment</div><div class="fs-4 fw-bold">{{ partial_count }}</div></div></div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form class="row g-2" method="get" action="/pending-bills">
+        <div class="col-12 col-md-8">
+          <label class="form-label">Search</label>
+          <input class="form-control" name="q" value="{{ q }}" placeholder="Customer name / phone" />
+        </div>
+        <div class="col-12 col-md-4 d-flex align-items-end justify-content-end gap-2">
+          <button class="btn btn-primary" type="submit">Search</button>
+          <a class="btn btn-outline-secondary" href="/pending-bills">Reset</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Bill #</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">Paid</th>
+            <th class="text-end">Balance</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in items %}
+            <tr>
+              <td>{{ b.bill_no }}</td>
+              <td>{{ b.date }}</td>
+              <td>{{ b.customer_name }}</td>
+              <td>{{ b.customer_phone or '' }}</td>
+              <td>
+                {% if b.status == 'Partial' %}
+                  <span class="badge bg-warning text-dark">Partial</span>
+                {% else %}
+                  <span class="badge bg-danger">Pending</span>
+                {% endif %}
+              </td>
+              <td class="text-end">{{ pkr_format(b.grand_total_pkr) }}</td>
+              <td class="text-end">{{ pkr_format(b.paid_amount_pkr) }}</td>
+              <td class="text-end">{{ pkr_format(b.balance_pkr) }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" href="/bills/{{ b.id }}">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+          {% if items|length == 0 %}
+            <tr><td colspan="9" class="text-center text-muted py-4">No pending bills.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

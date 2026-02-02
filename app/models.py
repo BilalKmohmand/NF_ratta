@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.sql import func
 
 from .db import Base
@@ -146,6 +146,78 @@ class Transaction(Base):
 
     def __repr__(self) -> str:
         return f"<Transaction id={self.id} type={self.type} date={self.date} amount_pkr={self.amount_pkr}>"
+
+
+class Client(Base):
+    __tablename__ = "clients"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    name = Column(String(256), nullable=False, index=True)
+    phone = Column(String(64), nullable=False, index=True)
+    address = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class Bill(Base):
+    __tablename__ = "bills"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    bill_no = Column(Integer, nullable=False, index=True, unique=True)
+    date = Column(Date, nullable=False, index=True)
+
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
+
+    customer_name = Column(String(256), nullable=False, index=True)
+    customer_phone = Column(String(64), nullable=True, index=True)
+    customer_address = Column(Text, nullable=True)
+
+    subtotal_pkr = Column(Integer, nullable=False, default=0)
+    discount_pkr = Column(Integer, nullable=False, default=0)
+    grand_total_pkr = Column(Integer, nullable=False, default=0)
+
+    paid_amount_pkr = Column(Integer, nullable=False, default=0)
+    balance_pkr = Column(Integer, nullable=False, default=0)
+    status = Column(String(16), nullable=False, default="Pending", index=True)
+
+    payment_method = Column(String(32), nullable=True)
+    payment_notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class BillItem(Base):
+    __tablename__ = "bill_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    bill_id = Column(Integer, ForeignKey("bills.id"), nullable=False, index=True)
+    description = Column(Text, nullable=False)
+
+    quantity = Column(Integer, nullable=False, default=1)
+    rate_pkr = Column(Integer, nullable=False, default=0)
+    amount_pkr = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class BillPayment(Base):
+    __tablename__ = "bill_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    bill_id = Column(Integer, ForeignKey("bills.id"), nullable=False, index=True)
+    amount_pkr = Column(Integer, nullable=False)
+    payment_method = Column(String(32), nullable=False, default="Cash")
+    notes = Column(Text, nullable=True)
+    date = Column(Date, nullable=False, index=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class InventoryCategory(Base):
