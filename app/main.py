@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from . import crud
 from .db import Base, IS_SQLITE, SessionLocal, engine
-from .models import Employee, Transaction, WeeklyAssignment
+from .models import BedSize, Employee, FoamBrand, FoamModel, FoamThickness, InventoryCategory, Transaction, WeeklyAssignment
 from .utils import (
     EMPLOYEE_CATEGORIES,
     EMPLOYEE_WORK_TYPES,
@@ -937,14 +937,216 @@ def coming_soon(request: Request, feature: str):
     return TEMPLATES.TemplateResponse("coming_soon.html", ctx)
 
 
+def _inventory_badge_class(badge: str) -> str:
+    if badge == "In Stock":
+        return "text-bg-success"
+    if badge == "Low Stock":
+        return "text-bg-warning"
+    if badge == "Out of Stock":
+        return "text-bg-danger"
+    if badge == "Made to Order":
+        return "text-bg-secondary"
+    return "text-bg-secondary"
+
+
+def _ensure_inventory_seeded(db: Session) -> None:
+    try:
+        crud.ensure_inventory_seed(db)
+    except Exception:
+        return
+
+
 @app.get("/inventory", response_class=HTMLResponse)
-def inventory_disabled_root():
-    return RedirectResponse(url="/coming-soon/inventory", status_code=303)
+def inventory_index(request: Request, db: Session = Depends(get_db)):
+    _ensure_inventory_seeded(db)
+    ctx = common_context(request)
+    return TEMPLATES.TemplateResponse("inventory_index.html", ctx)
 
 
-@app.get("/inventory/{path:path}", response_class=HTMLResponse)
-def inventory_disabled_all(path: str):
-    return RedirectResponse(url="/coming-soon/inventory", status_code=303)
+@app.get("/inventory/furniture", response_class=HTMLResponse)
+def inventory_furniture(request: Request, db: Session = Depends(get_db)):
+    _ensure_inventory_seeded(db)
+
+    roots = crud.list_inventory_categories(db, type="FURNITURE", parent_id=None)
+    root_id = next((c.id for c in roots if (c.name or "").lower() == "furniture"), None)
+
+    furniture_categories: list[InventoryCategory] = []
+    furniture_subcategories: list[InventoryCategory] = []
+    if root_id is not None:
+        furniture_categories = crud.list_inventory_categories(db, type="FURNITURE", parent_id=root_id)
+        for cat in furniture_categories:
+            furniture_subcategories.extend(crud.list_inventory_categories(db, type="FURNITURE", parent_id=cat.id))
+
+    items = crud.list_furniture_items_filtered(db, q=None, category_id=None, limit=500)
+    cards = crud.furniture_cards(db, items=items)
+
+    cat_name_by_id = {c.id: c.name for c in furniture_categories}
+    subcat_name_by_id = {c.id: c.name for c in furniture_subcategories}
+
+    for c in cards:
+        it = c.get("item")
+        if it is None:
+            continue
+        c["badge_class"] = _inventory_badge_class(str(c.get("badge") or ""))
+        c["category_name"] = cat_name_by_id.get(getattr(it, "category_id", None), "")
+        sc_id = getattr(it, "sub_category_id", None)
+        c["sub_category_name"] = subcat_name_by_id.get(sc_id) if sc_id else ""
+
+    ctx = common_context(request)
+    ctx.update(
+        {
+            "cards": cards,
+            "furniture_categories": furniture_categories,
+            "furniture_subcategories": furniture_subcategories,
+            "bed_sizes": crud.list_bed_sizes(db),
+        }
+    )
+    return TEMPLATES.TemplateResponse("inventory_furniture.html", ctx)
+
+
+@app.post("/inventory/furniture", response_class=HTMLResponse)
+def inventory_furniture_create(
+    request: Request,
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+    category_id: int = Form(...),
+    sub_category_id: str | None = Form(None),
+    bed_size_id: str = Form(...),
+    material_type: str = Form("Wood"),
+    qty_on_hand: int = Form(0),
+    cost_price_pkr: int = Form(0),
+    sale_price_pkr: int = Form(0),
+    notes: str | None = Form(None),
+):
+    _ensure_inventory_seeded(db)
+
+    sub_id: int | None = None
+    try:
+        if sub_category_id and sub_category_id.strip():
+            sub_id = int(sub_category_id)
+    except Exception:
+        sub_id = None
+
+    sku = f"FUR-{int(dt.datetime.utcnow().timestamp())}"
+    item = crud.create_furniture_item(
+        db,
+        name=name,
+        sku=sku,
+        material_type=material_type or "Wood",
+        color_finish=None,
+        status="IN_STOCK",
+        category_id=category_id,
+        sub_category_id=sub_id,
+        notes=notes,
+    )
+
+    bs_id: int | None = None
+    try:
+        if bed_size_id != "custom":
+            bs_id = int(bed_size_id)
+    except Exception:
+        bs_id = None
+
+    crud.upsert_furniture_variant(
+        db,
+        furniture_item_id=item.id,
+        bed_size_id=bs_id,
+        qty_on_hand=int(qty_on_hand or 0),
+        cost_price_pkr=int(cost_price_pkr or 0),
+        sale_price_pkr=int(sale_price_pkr or 0),
+        reorder_level=0,
+    )
+    return RedirectResponse(url="/inventory/furniture", status_code=303)
+
+
+@app.post("/inventory/furniture/{item_id}/delete", response_class=HTMLResponse)
+def inventory_furniture_delete(item_id: int, db: Session = Depends(get_db)):
+    crud.soft_delete_furniture_item(db, item_id=item_id)
+    return RedirectResponse(url="/inventory/furniture", status_code=303)
+
+
+@app.get("/inventory/foam", response_class=HTMLResponse)
+def inventory_foam(request: Request, db: Session = Depends(get_db)):
+    _ensure_inventory_seeded(db)
+
+    cards = crud.foam_variant_cards(db, q=None, brand_id=None, limit=500)
+    for c in cards:
+        c["badge_class"] = _inventory_badge_class(str(c.get("badge") or ""))
+
+    ctx = common_context(request)
+    ctx.update(
+        {
+            "cards": cards,
+            "foam_brands": crud.list_foam_brands(db),
+            "bed_sizes": crud.list_bed_sizes(db),
+            "thicknesses": crud.list_thicknesses(db),
+        }
+    )
+    return TEMPLATES.TemplateResponse("inventory_foam.html", ctx)
+
+
+@app.post("/inventory/foam", response_class=HTMLResponse)
+def inventory_foam_create(
+    request: Request,
+    db: Session = Depends(get_db),
+    brand_id: int = Form(...),
+    model_name: str = Form(...),
+    bed_size_id: int = Form(...),
+    thickness_id: int = Form(...),
+    qty_on_hand: int = Form(0),
+    purchase_cost_pkr: int = Form(0),
+    sale_price_pkr: int = Form(0),
+    notes: str | None = Form(None),
+):
+    _ensure_inventory_seeded(db)
+
+    model = crud.create_foam_model(db, brand_id=brand_id, name=model_name, notes=notes)
+    crud.upsert_foam_variant(
+        db,
+        foam_model_id=model.id,
+        bed_size_id=bed_size_id,
+        thickness_id=thickness_id,
+        density_type=None,
+        qty_on_hand=int(qty_on_hand or 0),
+        purchase_cost_pkr=int(purchase_cost_pkr or 0),
+        sale_price_pkr=int(sale_price_pkr or 0),
+        reorder_level=0,
+    )
+    return RedirectResponse(url="/inventory/foam", status_code=303)
+
+
+@app.post("/inventory/foam/{model_id}/delete", response_class=HTMLResponse)
+def inventory_foam_delete(model_id: int, db: Session = Depends(get_db)):
+    crud.soft_delete_foam_model(db, model_id=model_id)
+    return RedirectResponse(url="/inventory/foam", status_code=303)
+
+
+@app.post("/inventory/stock/adjust", response_class=HTMLResponse)
+def inventory_stock_adjust(
+    inventory_type: str = Form(...),
+    variant_id: int = Form(...),
+    transaction_type: str = Form("in"),
+    quantity: int = Form(...),
+    notes: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    qty = int(quantity or 0)
+    if qty <= 0:
+        return RedirectResponse(url="/inventory", status_code=303)
+    delta = qty if transaction_type == "in" else -qty
+    movement = "Stock In" if transaction_type == "in" else "Stock Out"
+    crud.adjust_stock(
+        db,
+        inventory_type=inventory_type,
+        variant_id=variant_id,
+        movement_type=movement,
+        qty_change=delta,
+        unit_cost_pkr=None,
+        notes=notes,
+    )
+    if inventory_type == "FOAM_VARIANT":
+        return RedirectResponse(url="/inventory/foam", status_code=303)
+    return RedirectResponse(url="/inventory/furniture", status_code=303)
 
 
 @app.get("/add", response_class=HTMLResponse)

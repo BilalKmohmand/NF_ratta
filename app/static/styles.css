@@ -302,6 +302,27 @@ body.modal-open .btn:hover {
   transform: translateY(-1px);
 }
 
+.hover-elevate {
+  position: relative;
+  z-index: 0;
+}
+
+.hover-elevate::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0px;
+  border-radius: inherit;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.hover-elevate:hover::after {
+  opacity: 1;
+  background-color: rgba(0,0,0,0.04);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page, body.ready .page, .btn, .card, .table, .form-control, .form-select,
   .auth-orb, .home-hero-orb, .auth-hero, .auth-card, .auth-kpi, .home-hero, .module-card {

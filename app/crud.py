@@ -833,6 +833,12 @@ def furniture_cards(db: Session, *, items: list[FurnitureItem]) -> list[dict]:
     out: list[dict] = []
     for it in items:
         vs = by_item.get(it.id, [])
+        primary_variant_id: int | None = None
+        if vs:
+            try:
+                primary_variant_id = sorted(vs, key=lambda v: (v.bed_size_id is None, v.bed_size_id or 0, v.id))[0].id
+            except Exception:
+                primary_variant_id = vs[0].id
         total_qty = sum(int(v.qty_on_hand or 0) for v in vs)
         min_cost = min((int(v.cost_price_pkr or 0) for v in vs), default=0)
         min_sale = min((int(v.sale_price_pkr or 0) for v in vs), default=0)
@@ -871,6 +877,7 @@ def furniture_cards(db: Session, *, items: list[FurnitureItem]) -> list[dict]:
                 "min_cost": min_cost,
                 "min_sale": min_sale,
                 "badge": badge,
+                "primary_variant_id": primary_variant_id,
             }
         )
     return out

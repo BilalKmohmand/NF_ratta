@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 fw-bold mb-1">Inventory</h1>
+    <div class="text-secondary">Manage furniture and foam stock</div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-md-6">
+    <a class="text-decoration-none" href="/inventory/furniture">
+      <div class="card h-100 card-hover">
+        <div class="card-body">
+          <div class="fw-semibold fs-5 mb-1">Furniture</div>
+          <div class="text-secondary">Beds, almaris, showcases, etc.</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-12 col-md-6">
+    <a class="text-decoration-none" href="/inventory/foam">
+      <div class="card h-100 card-hover">
+        <div class="card-body">
+          <div class="fw-semibold fs-5 mb-1">Foam</div>
+          <div class="text-secondary">Mattresses and foam variants</div>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+{% endblock %}

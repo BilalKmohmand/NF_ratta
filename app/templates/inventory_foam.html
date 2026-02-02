@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 fw-bold mb-1">Foam Inventory</h1>
+    <div class="text-secondary">Manage mattresses and foam products</div>
+  </div>
+  <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#foamModal">
+    Add Foam
+  </button>
+</div>
+
+<div class="row g-3 align-items-end mb-4">
+  <div class="col-12 col-md-8">
+    <label class="form-label">Search</label>
+    <input id="foamSearch" class="form-control form-control-lg" placeholder="Search foam..." />
+  </div>
+  <div class="col-12 col-md-4">
+    <label class="form-label">Brand</label>
+    <select id="foamBrandFilter" class="form-select form-select-lg">
+      <option value="all">All Brands</option>
+      {% for b in foam_brands %}
+        <option value="{{ b.id }}">{{ b.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+
+{% if cards|length == 0 %}
+  <div class="card p-5 text-center">
+    <div class="h5 fw-semibold mb-1">No foam found</div>
+    <div class="text-secondary mb-3">Get started by adding your first foam item</div>
+    <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#foamModal">Add Foam</button>
+  </div>
+{% else %}
+  <div class="row g-3" id="foamGrid">
+    {% for c in cards %}
+      {% set v = c.variant %}
+      {% set model = c.model %}
+      {% set brand = c.brand %}
+      {% set size = c.size %}
+      {% set thick = c.thickness %}
+      <div class="col-12 col-md-6 col-xl-4 foam-card"
+           data-brand-id="{{ brand.id }}"
+           data-search="{{ (brand.name ~ ' ' ~ model.name ~ ' ' ~ size.label)|lower }}">
+        <div class="card hover-elevate">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+              <div class="me-3" style="min-width: 0;">
+                <div class="fw-semibold fs-5 text-truncate">{{ brand.name }}</div>
+                <div class="text-secondary small">{{ size.label }} • {{ model.name }}</div>
+              </div>
+              <span class="badge rounded-pill {{ c.badge_class }}">{{ c.badge }}</span>
+            </div>
+
+            <div class="small">
+              <div class="d-flex justify-content-between py-1">
+                <span class="text-secondary">Dimensions:</span>
+                <span>{{ size.width_in }}″ × {{ size.length_in }}″</span>
+              </div>
+              <div class="d-flex justify-content-between py-1">
+                <span class="text-secondary">Thickness:</span>
+                <span>{{ thick.inches }}″</span>
+              </div>
+              <div class="d-flex justify-content-between py-1">
+                <span class="text-secondary">Quantity:</span>
+                <span class="fw-semibold">{{ v.qty_on_hand }}</span>
+              </div>
+              <div class="d-flex justify-content-between py-1">
+                <span class="text-secondary">Purchase:</span>
+                <span>Rs. {{ '{:,}'.format(v.purchase_cost_pkr or 0) }}</span>
+              </div>
+              <div class="d-flex justify-content-between py-1">
+                <span class="text-secondary">Selling:</span>
+                <span class="fw-bold text-primary">Rs. {{ '{:,}'.format(v.sale_price_pkr or 0) }}</span>
+              </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <button
+                class="btn btn-outline-secondary flex-grow-1"
+                type="button"
+                data-bs-toggle="modal"
+                data-bs-target="#stockAdjustModal"
+                data-variant-id="{{ v.id }}"
+                data-item-name="{{ brand.name }} - {{ size.label }}"
+                data-current-qty="{{ v.qty_on_hand }}"
+                data-inventory-type="FOAM_VARIANT"
+              >
+                Adjust Stock
+              </button>
+
+              <form method="post" action="/inventory/foam/{{ model.id }}/delete" class="m-0">
+                <button class="btn btn-outline-danger" type="submit">Delete</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<div class="modal fade" id="foamModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Foam</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="/inventory/foam">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label">Brand</label>
+              <select class="form-select form-select-lg" name="brand_id" required>
+                <option value="">Select brand</option>
+                {% for b in foam_brands %}
+                  <option value="{{ b.id }}">{{ b.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label">Model Name</label>
+              <input class="form-control form-control-lg" name="model_name" required placeholder="e.g., Master" />
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label">Size</label>
+              <select class="form-select form-select-lg" name="bed_size_id" required>
+                {% for s in bed_sizes %}
+                  <option value="{{ s.id }}">{{ s.label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label">Thickness</label>
+              <select class="form-select form-select-lg" name="thickness_id" required>
+                {% for t in thicknesses %}
+                  <option value="{{ t.id }}">{{ t.inches }}″</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Quantity</label>
+              <input class="form-control form-control-lg" name="qty_on_hand" type="number" min="0" value="0" required />
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Purchase Price (Rs.)</label>
+              <input class="form-control form-control-lg" name="purchase_cost_pkr" type="number" min="0" value="0" required />
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label">Selling Price (Rs.)</label>
+              <input class="form-control form-control-lg" name="sale_price_pkr" type="number" min="0" value="0" required />
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Notes (Optional)</label>
+              <textarea class="form-control" rows="3" name="notes" placeholder="Any additional notes..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-lg">Add Foam</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="stockAdjustModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Adjust Stock</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="/inventory/stock/adjust">
+        <input type="hidden" name="inventory_type" id="stockAdjustInventoryType" />
+        <input type="hidden" name="variant_id" id="stockAdjustVariantId" />
+        <div class="modal-body">
+          <div class="p-3 rounded-3 bg-body-tertiary mb-3">
+            <div class="fw-semibold text-truncate" id="stockAdjustItemName"></div>
+            <div class="small text-secondary">
+              Current stock: <span class="fw-semibold" id="stockAdjustCurrentQty"></span>
+            </div>
+          </div>
+
+          <div class="btn-group w-100 mb-3" role="group" aria-label="Stock adjust type">
+            <input type="radio" class="btn-check" name="transaction_type" id="stockIn" value="in" autocomplete="off" checked>
+            <label class="btn btn-outline-success" for="stockIn">Stock In</label>
+
+            <input type="radio" class="btn-check" name="transaction_type" id="stockOut" value="out" autocomplete="off">
+            <label class="btn btn-outline-warning" for="stockOut">Stock Out</label>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Quantity</label>
+            <input class="form-control form-control-lg" id="stockAdjustQty" name="quantity" type="number" min="1" required />
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Notes (Optional)</label>
+            <textarea class="form-control" rows="3" name="notes" placeholder="e.g., Sale to customer, Damaged item..."></textarea>
+          </div>
+
+          <div class="p-3 rounded-3 d-none" id="stockAdjustPreview"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Update Stock</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const search = document.getElementById('foamSearch');
+    const brand = document.getElementById('foamBrandFilter');
+    const cards = Array.from(document.querySelectorAll('.foam-card'));
+
+    function applyFilters() {
+      const q = (search && search.value || '').toLowerCase().trim();
+      const b = (brand && brand.value) || 'all';
+      for (const el of cards) {
+        const s = (el.getAttribute('data-search') || '');
+        const bid = (el.getAttribute('data-brand-id') || '');
+        const okSearch = !q || s.includes(q);
+        const okBrand = b === 'all' || bid === b;
+        el.style.display = (okSearch && okBrand) ? '' : 'none';
+      }
+    }
+
+    if (search) search.addEventListener('input', applyFilters);
+    if (brand) brand.addEventListener('change', applyFilters);
+
+    const adjustModal = document.getElementById('stockAdjustModal');
+    if (adjustModal) {
+      adjustModal.addEventListener('show.bs.modal', function (evt) {
+        const btn = evt.relatedTarget;
+        if (!btn) return;
+        const variantId = btn.getAttribute('data-variant-id') || '';
+        const itemName = btn.getAttribute('data-item-name') || '';
+        const currentQty = btn.getAttribute('data-current-qty') || '0';
+        const invType = btn.getAttribute('data-inventory-type') || '';
+
+        document.getElementById('stockAdjustVariantId').value = variantId;
+        document.getElementById('stockAdjustInventoryType').value = invType;
+        document.getElementById('stockAdjustItemName').textContent = itemName;
+        document.getElementById('stockAdjustCurrentQty').textContent = currentQty;
+
+        const qtyInput = document.getElementById('stockAdjustQty');
+        if (qtyInput) qtyInput.value = '';
+        const preview = document.getElementById('stockAdjustPreview');
+        if (preview) {
+          preview.classList.add('d-none');
+          preview.textContent = '';
+        }
+      });
+
+      function updatePreview() {
+        const currentQty = parseInt(document.getElementById('stockAdjustCurrentQty').textContent || '0');
+        const qty = parseInt(document.getElementById('stockAdjustQty').value || '0');
+        const isOut = document.getElementById('stockOut').checked;
+        const preview = document.getElementById('stockAdjustPreview');
+        if (!preview) return;
+        if (!qty) {
+          preview.classList.add('d-none');
+          preview.textContent = '';
+          return;
+        }
+        const next = isOut ? (currentQty - qty) : (currentQty + qty);
+        preview.classList.remove('d-none');
+        preview.classList.remove('bg-success-subtle', 'text-success-emphasis', 'bg-warning-subtle', 'text-warning-emphasis');
+        if (isOut) {
+          preview.classList.add('bg-warning-subtle', 'text-warning-emphasis');
+        } else {
+          preview.classList.add('bg-success-subtle', 'text-success-emphasis');
+        }
+        preview.innerHTML = 'New stock will be: <span class="fs-5 fw-bold">' + next + '</span>';
+      }
+
+      document.getElementById('stockAdjustQty').addEventListener('input', updatePreview);
+      document.getElementById('stockIn').addEventListener('change', updatePreview);
+      document.getElementById('stockOut').addEventListener('change', updatePreview);
+    }
+  })();
+</script>
+{% endblock %}
