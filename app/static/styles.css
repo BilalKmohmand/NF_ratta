@@ -298,20 +298,32 @@ body.modal-open .btn:hover {
 .modal { z-index: 1055; }
 .modal-backdrop { z-index: 1050; }
 
+.modal {
+  --nf-modal-max-h: calc(100vh - 2rem);
+}
+
+@supports (height: 100dvh) {
+  .modal {
+    --nf-modal-max-h: calc(100dvh - 2rem);
+  }
+}
+
 .modal-dialog-scrollable {
-  height: calc(100vh - 2rem);
+  height: var(--nf-modal-max-h);
 }
 
 .modal-dialog-scrollable .modal-content {
-  max-height: calc(100vh - 2rem);
+  max-height: var(--nf-modal-max-h);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .modal-dialog-scrollable .modal-body {
   flex: 1 1 auto;
   overflow-y: scroll;
   scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .btn:hover {
