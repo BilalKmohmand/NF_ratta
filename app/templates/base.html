@@ -34,17 +34,12 @@
             {% if is_logged_in %}
               <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
               {% if request.url.path != '/' %}
-                {% if not request.url.path.startswith('/inventory') %}
-                  <li class="nav-item"><a class="nav-link" href="/employees">Employees</a></li>
-                {% endif %}
+                <li class="nav-item"><a class="nav-link" href="/employees">Employees</a></li>
                 {% if not request.url.path.startswith('/employees') %}
-                  <li class="nav-item"><a class="nav-link" href="/inventory">Inventory</a></li>
-                  {% if not request.url.path.startswith('/inventory') %}
-                    <li class="nav-item"><a class="nav-link" href="/daily">Daily Dashboard</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/reports">Reports</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/analytics">Analytics</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/transactions">Transactions</a></li>
-                  {% endif %}
+                  <li class="nav-item"><a class="nav-link" href="/daily">Daily Dashboard</a></li>
+                  <li class="nav-item"><a class="nav-link" href="/reports">Reports</a></li>
+                  <li class="nav-item"><a class="nav-link" href="/analytics">Analytics</a></li>
+                  <li class="nav-item"><a class="nav-link" href="/transactions">Transactions</a></li>
                 {% endif %}
               {% endif %}
             {% endif %}
@@ -64,7 +59,7 @@
               </span>
             </button>
             {% if is_logged_in %}
-              {% if not request.url.path.startswith('/employees') and not request.url.path.startswith('/inventory') %}
+              {% if not request.url.path.startswith('/employees') %}
                 <a class="btn btn-primary btn-sm" href="/add?type=incoming">+ Incoming</a>
                 <a class="btn btn-outline-primary btn-sm" href="/add?type=outgoing">+ Outgoing</a>
               {% endif %}
@@ -74,18 +69,6 @@
         </div>
       </div>
     </nav>
-
-    {% if is_logged_in and request.url.path.startswith('/inventory') %}
-      <div class="container mt-3">
-        <div class="inventory-topnav nav nav-pills gap-2">
-          <a class="nav-link {% if request.url.path == '/inventory' %}active{% endif %}" href="/inventory">Dashboard</a>
-          <a class="nav-link {% if request.url.path.startswith('/inventory/furniture') %}active{% endif %}" href="/inventory/furniture">Furniture</a>
-          <a class="nav-link {% if request.url.path.startswith('/inventory/foam') %}active{% endif %}" href="/inventory/foam">Foam</a>
-          <a class="nav-link {% if request.url.path.startswith('/inventory/stock-transactions') %}active{% endif %}" href="/inventory/stock-transactions">Stock Transactions</a>
-          <a class="nav-link {% if request.url.path.startswith('/inventory/low-stock') %}active{% endif %}" href="/inventory/low-stock">Low Stock</a>
-        </div>
-      </div>
-    {% endif %}
 
     <main class="container py-4 page">
       {% block content %}{% endblock %}
