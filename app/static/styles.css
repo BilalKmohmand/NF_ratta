@@ -298,8 +298,12 @@ body.modal-open .btn:hover {
 .modal { z-index: 1055; }
 .modal-backdrop { z-index: 1050; }
 
+.modal-dialog-scrollable {
+  height: calc(100vh - 2rem);
+}
+
 .modal-dialog-scrollable .modal-content {
-  max-height: 90vh;
+  max-height: calc(100vh - 2rem);
 }
 
 .modal-dialog-scrollable .modal-body {
