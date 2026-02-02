@@ -834,11 +834,25 @@ def furniture_cards(db: Session, *, items: list[FurnitureItem]) -> list[dict]:
     for it in items:
         vs = by_item.get(it.id, [])
         primary_variant_id: int | None = None
+        primary_bed_size_id: int | None = None
+        primary_qty_on_hand: int = 0
+        primary_cost_price_pkr: int = 0
+        primary_sale_price_pkr: int = 0
         if vs:
             try:
-                primary_variant_id = sorted(vs, key=lambda v: (v.bed_size_id is None, v.bed_size_id or 0, v.id))[0].id
+                primary = sorted(vs, key=lambda v: (v.bed_size_id is None, v.bed_size_id or 0, v.id))[0]
+                primary_variant_id = primary.id
+                primary_bed_size_id = primary.bed_size_id
+                primary_qty_on_hand = int(primary.qty_on_hand or 0)
+                primary_cost_price_pkr = int(primary.cost_price_pkr or 0)
+                primary_sale_price_pkr = int(primary.sale_price_pkr or 0)
             except Exception:
-                primary_variant_id = vs[0].id
+                primary = vs[0]
+                primary_variant_id = primary.id
+                primary_bed_size_id = primary.bed_size_id
+                primary_qty_on_hand = int(primary.qty_on_hand or 0)
+                primary_cost_price_pkr = int(primary.cost_price_pkr or 0)
+                primary_sale_price_pkr = int(primary.sale_price_pkr or 0)
         total_qty = sum(int(v.qty_on_hand or 0) for v in vs)
         min_cost = min((int(v.cost_price_pkr or 0) for v in vs), default=0)
         min_sale = min((int(v.sale_price_pkr or 0) for v in vs), default=0)
@@ -878,9 +892,39 @@ def furniture_cards(db: Session, *, items: list[FurnitureItem]) -> list[dict]:
                 "min_sale": min_sale,
                 "badge": badge,
                 "primary_variant_id": primary_variant_id,
+                "primary_bed_size_id": primary_bed_size_id,
+                "primary_qty_on_hand": primary_qty_on_hand,
+                "primary_cost_price_pkr": primary_cost_price_pkr,
+                "primary_sale_price_pkr": primary_sale_price_pkr,
             }
         )
     return out
+
+
+def update_furniture_item(
+    db: Session,
+    *,
+    item_id: int,
+    name: str,
+    material_type: str,
+    status: str,
+    category_id: int,
+    sub_category_id: int | None,
+    notes: str | None,
+) -> FurnitureItem | None:
+    item = db.execute(select(FurnitureItem).where(FurnitureItem.id == item_id)).scalar_one_or_none()
+    if not item:
+        return None
+    item.name = name
+    item.material_type = material_type
+    item.status = status
+    item.category_id = category_id
+    item.sub_category_id = sub_category_id
+    item.notes = notes
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
 
 
 def soft_delete_furniture_item(db: Session, *, item_id: int) -> None:

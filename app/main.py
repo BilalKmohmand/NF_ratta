@@ -1022,6 +1022,7 @@ def inventory_furniture(request: Request, db: Session = Depends(get_db), categor
 def inventory_furniture_create(
     request: Request,
     db: Session = Depends(get_db),
+    item_id: str | None = Form(None),
     name: str = Form(...),
     category_id: int = Form(...),
     sub_category_id: str | None = Form(None),
@@ -1034,6 +1035,13 @@ def inventory_furniture_create(
 ):
     _ensure_inventory_seeded(db)
 
+    edit_item_id: int | None = None
+    try:
+        if item_id and str(item_id).strip():
+            edit_item_id = int(str(item_id).strip())
+    except Exception:
+        edit_item_id = None
+
     sub_id: int | None = None
     try:
         if sub_category_id and sub_category_id.strip():
@@ -1041,18 +1049,32 @@ def inventory_furniture_create(
     except Exception:
         sub_id = None
 
-    sku = f"FUR-{int(dt.datetime.utcnow().timestamp())}"
-    item = crud.create_furniture_item(
-        db,
-        name=name,
-        sku=sku,
-        material_type=material_type or "Wood",
-        color_finish=None,
-        status="IN_STOCK",
-        category_id=category_id,
-        sub_category_id=sub_id,
-        notes=notes,
-    )
+    item = None
+    if edit_item_id is not None:
+        item = crud.update_furniture_item(
+            db,
+            item_id=edit_item_id,
+            name=name,
+            material_type=material_type or "Wood",
+            status="IN_STOCK",
+            category_id=category_id,
+            sub_category_id=sub_id,
+            notes=notes,
+        )
+
+    if item is None:
+        sku = f"FUR-{int(dt.datetime.utcnow().timestamp())}"
+        item = crud.create_furniture_item(
+            db,
+            name=name,
+            sku=sku,
+            material_type=material_type or "Wood",
+            color_finish=None,
+            status="IN_STOCK",
+            category_id=category_id,
+            sub_category_id=sub_id,
+            notes=notes,
+        )
 
     bs_id: int | None = None
     try:

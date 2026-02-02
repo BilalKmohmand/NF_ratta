@@ -303,7 +303,8 @@ body.modal-open .btn:hover {
 }
 
 .modal-dialog-scrollable .modal-body {
-  overflow-y: auto;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
 }
 
 .btn:hover {
