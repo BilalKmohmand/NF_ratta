@@ -272,6 +272,28 @@ body.modal-open .page {
   background: linear-gradient(135deg, rgba(13,110,253,0.20), rgba(25,135,84,0.16));
 }
 
+.emp-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--bs-border-color) 65%, transparent);
+  background: color-mix(in srgb, var(--bs-body-bg) 85%, transparent);
+}
+
+.emp-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.emp-avatar-fallback {
+  font-weight: 900;
+}
+
 .card-hover {
   transition: transform 200ms ease, box-shadow 200ms ease;
 }
