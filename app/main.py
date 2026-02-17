@@ -26,12 +26,12 @@ from reportlab.graphics.charts.barcharts import VerticalBarChart
 from reportlab.graphics.charts.linecharts import HorizontalLineChart
 from reportlab.graphics.charts.piecharts import Pie
 from reportlab.graphics.charts.legends import Legend
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from . import crud
 from .db import Base, IS_SQLITE, SessionLocal, engine
-from .models import BedSize, Employee, FoamBrand, FoamModel, FoamThickness, InventoryCategory, Transaction, WeeklyAssignment
+from .models import BedSize, Employee, FoamBrand, FoamModel, FoamThickness, FoamVariant, InventoryCategory, Transaction, WeeklyAssignment
 from .utils import (
     EMPLOYEE_CATEGORIES,
     EMPLOYEE_WORK_TYPES,
@@ -1628,12 +1628,27 @@ def inventory_stock_adjust(
     variant_id: int = Form(...),
     transaction_type: str = Form("in"),
     quantity: int = Form(...),
+    purchase_cost_pkr: str | None = Form(None),
+    sale_price_pkr: str | None = Form(None),
     notes: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     qty = int(quantity or 0)
     if qty <= 0:
         return RedirectResponse(url="/inventory", status_code=303)
+
+    if inventory_type == "FOAM_VARIANT":
+        v = db.execute(select(FoamVariant).where(FoamVariant.id == int(variant_id))).scalar_one_or_none()
+        if v:
+            p = (purchase_cost_pkr or "").strip() if purchase_cost_pkr is not None else ""
+            s = (sale_price_pkr or "").strip() if sale_price_pkr is not None else ""
+            if p != "":
+                v.purchase_cost_pkr = int(p or 0)
+            if s != "":
+                v.sale_price_pkr = int(s or 0)
+            db.add(v)
+            db.commit()
+
     delta = qty if transaction_type == "in" else -qty
     movement = "Stock In" if transaction_type == "in" else "Stock Out"
     crud.adjust_stock(

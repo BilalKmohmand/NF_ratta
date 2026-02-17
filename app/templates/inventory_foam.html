@@ -75,6 +75,10 @@
                 <span class="text-secondary">Selling:</span>
                 <span class="fw-bold text-primary">Rs. {{ '{:,}'.format(v.sale_price_pkr or 0) }}</span>
               </div>
+              <div class="d-flex justify-content-between py-1">
+                <span class="text-secondary">Total:</span>
+                <span class="fw-semibold">Rs. {{ '{:,}'.format((v.qty_on_hand or 0) * (v.sale_price_pkr or 0)) }}</span>
+              </div>
             </div>
 
             <div class="d-flex flex-wrap gap-2 mt-3">
@@ -86,6 +90,8 @@
                 data-variant-id="{{ v.id }}"
                 data-item-name="{{ brand.name }} - {{ size.label }}"
                 data-current-qty="{{ v.qty_on_hand }}"
+                data-current-purchase="{{ v.purchase_cost_pkr or 0 }}"
+                data-current-sale="{{ v.sale_price_pkr or 0 }}"
                 data-inventory-type="FOAM_VARIANT"
               >
                 Adjust Stock
@@ -208,6 +214,17 @@
             <input class="form-control form-control-lg" id="stockAdjustQty" name="quantity" type="number" min="1" required />
           </div>
 
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label">Purchase Price (Rs.)</label>
+              <input class="form-control form-control-lg" id="stockAdjustPurchase" name="purchase_cost_pkr" type="number" min="0" placeholder="Leave blank to keep same" />
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label">Selling Price (Rs.)</label>
+              <input class="form-control form-control-lg" id="stockAdjustSale" name="sale_price_pkr" type="number" min="0" placeholder="Leave blank to keep same" />
+            </div>
+          </div>
+
           <div class="mb-3">
             <label class="form-label">Notes (Optional)</label>
             <textarea class="form-control" rows="3" name="notes" placeholder="e.g., Sale to customer, Damaged item..."></textarea>
@@ -255,6 +272,8 @@
         const variantId = btn.getAttribute('data-variant-id') || '';
         const itemName = btn.getAttribute('data-item-name') || '';
         const currentQty = btn.getAttribute('data-current-qty') || '0';
+        const currentPurchase = btn.getAttribute('data-current-purchase') || '';
+        const currentSale = btn.getAttribute('data-current-sale') || '';
         const invType = btn.getAttribute('data-inventory-type') || '';
 
         document.getElementById('stockAdjustVariantId').value = variantId;
@@ -264,6 +283,12 @@
 
         const qtyInput = document.getElementById('stockAdjustQty');
         if (qtyInput) qtyInput.value = '';
+
+        const purchaseInput = document.getElementById('stockAdjustPurchase');
+        if (purchaseInput) purchaseInput.value = currentPurchase;
+        const saleInput = document.getElementById('stockAdjustSale');
+        if (saleInput) saleInput.value = currentSale;
+
         const preview = document.getElementById('stockAdjustPreview');
         if (preview) {
           preview.classList.add('d-none');
