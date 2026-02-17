@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 
 from sqlalchemy import and_, case, func, or_, select, update as sql_update
 from sqlalchemy.orm import Session
@@ -862,6 +863,10 @@ def _upsert_thickness(db: Session, *, inches: int, sort_order: int) -> FoamThick
     return t
 
 
+def upsert_thickness(db: Session, *, inches: int) -> FoamThickness:
+    return _upsert_thickness(db, inches=inches, sort_order=int(inches or 0))
+
+
 def _upsert_foam_brand(db: Session, *, name: str) -> FoamBrand:
     stmt = select(FoamBrand).where(func.lower(FoamBrand.name) == name.lower())
     b = db.execute(stmt).scalar_one_or_none()
@@ -877,6 +882,55 @@ def _upsert_foam_brand(db: Session, *, name: str) -> FoamBrand:
     db.commit()
     db.refresh(b)
     return b
+
+
+def upsert_foam_brand(db: Session, *, name: str) -> FoamBrand:
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Brand name is required")
+    return _upsert_foam_brand(db, name=name)
+
+
+def upsert_bed_size_by_label(db: Session, *, label: str) -> BedSize:
+    label = (label or "").strip()
+    if not label:
+        raise ValueError("Bed size label is required")
+
+    stmt = select(BedSize).where(func.lower(BedSize.label) == label.lower())
+    s = db.execute(stmt).scalar_one_or_none()
+    if s:
+        if not s.is_active:
+            s.is_active = True
+            db.add(s)
+            db.commit()
+            db.refresh(s)
+        return s
+
+    m = re.search(r"\((\d+)\s*[x×]\s*(\d+)\)", label)
+    if m:
+        width_in = int(m.group(1))
+        length_in = int(m.group(2))
+        width_ft_x100 = int(round(width_in / 12.0 * 100))
+        length_ft_x100 = int(round(length_in / 12.0 * 100))
+        return _upsert_bed_size(
+            db,
+            label=label,
+            width_in=width_in,
+            length_in=length_in,
+            width_ft_x100=width_ft_x100,
+            length_ft_x100=length_ft_x100,
+            sort_order=999,
+        )
+
+    return _upsert_bed_size(
+        db,
+        label=label,
+        width_in=0,
+        length_in=0,
+        width_ft_x100=None,
+        length_ft_x100=None,
+        sort_order=999,
+    )
 
 
 def _upsert_foam_model(db: Session, *, brand_id: int, name: str) -> FoamModel:

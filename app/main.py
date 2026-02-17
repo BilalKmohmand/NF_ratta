@@ -1586,10 +1586,10 @@ def inventory_foam(request: Request, db: Session = Depends(get_db)):
 def inventory_foam_create(
     request: Request,
     db: Session = Depends(get_db),
-    brand_id: int = Form(...),
+    brand_name: str = Form(...),
     model_name: str = Form(...),
-    bed_size_id: int = Form(...),
-    thickness_id: int = Form(...),
+    bed_size_label: str = Form(...),
+    thickness_in: str = Form(...),
     qty_on_hand: int = Form(0),
     purchase_cost_pkr: int = Form(0),
     sale_price_pkr: int = Form(0),
@@ -1597,12 +1597,16 @@ def inventory_foam_create(
 ):
     _ensure_inventory_seeded(db)
 
-    model = crud.create_foam_model(db, brand_id=brand_id, name=model_name, notes=notes)
+    brand = crud.upsert_foam_brand(db, name=brand_name)
+    size = crud.upsert_bed_size_by_label(db, label=bed_size_label)
+    thickness = crud.upsert_thickness(db, inches=int(str(thickness_in or "").replace("\"", "").strip() or 0))
+
+    model = crud.create_foam_model(db, brand_id=brand.id, name=model_name, notes=notes)
     crud.upsert_foam_variant(
         db,
         foam_model_id=model.id,
-        bed_size_id=bed_size_id,
-        thickness_id=thickness_id,
+        bed_size_id=size.id,
+        thickness_id=thickness.id,
         density_type=None,
         qty_on_hand=int(qty_on_hand or 0),
         purchase_cost_pkr=int(purchase_cost_pkr or 0),
