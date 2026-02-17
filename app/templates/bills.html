@@ -36,30 +36,17 @@
     </div>
   </div>
 
-  <div class="card">
-    <div class="table-responsive">
-      <table class="table table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Bill #</th>
-            <th>Date</th>
-            <th>Customer</th>
-            <th>Phone</th>
-            <th>Status</th>
-            <th class="text-end">Total</th>
-            <th class="text-end">Paid</th>
-            <th class="text-end">Balance</th>
-            <th class="text-end">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for b in items %}
-            <tr>
-              <td>{{ b.bill_no }}</td>
-              <td>{{ b.date }}</td>
-              <td>{{ b.customer_name }}</td>
-              <td>{{ b.customer_phone or '' }}</td>
-              <td>
+  <div class="row g-3">
+    {% for b in items %}
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+              <div>
+                <div class="fw-semibold">Bill #{{ b.bill_no }}</div>
+                <div class="text-muted small">{{ b.date }}</div>
+              </div>
+              <div>
                 {% if b.status == 'Paid' %}
                   <span class="badge bg-success">Paid</span>
                 {% elif b.status == 'Partial' %}
@@ -67,20 +54,42 @@
                 {% else %}
                   <span class="badge bg-danger">Pending</span>
                 {% endif %}
-              </td>
-              <td class="text-end">{{ pkr_format(b.grand_total_pkr) }}</td>
-              <td class="text-end">{{ pkr_format(b.paid_amount_pkr) }}</td>
-              <td class="text-end">{{ pkr_format(b.balance_pkr) }}</td>
-              <td class="text-end">
-                <a class="btn btn-sm btn-outline-secondary" href="/bills/{{ b.id }}">View</a>
-              </td>
-            </tr>
-          {% endfor %}
-          {% if items|length == 0 %}
-            <tr><td colspan="9" class="text-center text-muted py-4">No bills.</td></tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <div class="fw-semibold">{{ b.customer_name }}</div>
+              <div class="text-muted small">{{ b.customer_phone or '-' }}</div>
+            </div>
+
+            <div class="row g-2">
+              <div class="col-4">
+                <div class="text-muted small">Total</div>
+                <div class="fw-semibold">{{ pkr_format(b.grand_total_pkr) }}</div>
+              </div>
+              <div class="col-4">
+                <div class="text-muted small">Paid</div>
+                <div class="fw-semibold">{{ pkr_format(b.paid_amount_pkr) }}</div>
+              </div>
+              <div class="col-4">
+                <div class="text-muted small">Balance</div>
+                <div class="fw-semibold">{{ pkr_format(b.balance_pkr) }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer d-flex align-items-center justify-content-end">
+            <a class="btn btn-sm btn-outline-secondary" href="/bills/{{ b.id }}">View</a>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+
+    {% if items|length == 0 %}
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body text-center text-muted py-4">No bills.</div>
+        </div>
+      </div>
+    {% endif %}
   </div>
 {% endblock %}
