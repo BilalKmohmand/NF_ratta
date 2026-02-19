@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from . import crud
 from .db import Base, IS_SQLITE, SessionLocal, engine
-from .models import BedSize, Employee, FoamBrand, FoamModel, FoamThickness, FoamVariant, InventoryCategory, Transaction, WeeklyAssignment
+from .models import BedSize, Employee, FoamBrand, FoamModel, FoamThickness, FoamVariant, FurnitureItem, FurnitureVariant, InventoryCategory, Transaction, WeeklyAssignment
 from .utils import (
     EMPLOYEE_CATEGORIES,
     EMPLOYEE_WORK_TYPES,
@@ -1512,6 +1512,73 @@ def inventory_furniture(request: Request, db: Session = Depends(get_db), categor
         }
     )
     return TEMPLATES.TemplateResponse("inventory_furniture.html", ctx)
+
+
+@app.get("/inventory/furniture/new", response_class=HTMLResponse)
+def inventory_furniture_new(request: Request, db: Session = Depends(get_db)):
+    _ensure_inventory_seeded(db)
+
+    roots = crud.list_inventory_categories(db, type="FURNITURE", parent_id=None)
+    root_id = next((c.id for c in roots if (c.name or "").lower() == "furniture"), None)
+    furniture_categories: list[InventoryCategory] = []
+    if root_id is not None:
+        furniture_categories = crud.list_inventory_categories(db, type="FURNITURE", parent_id=root_id)
+
+    bed_sizes = crud.list_bed_sizes(db)
+    default_bed_size_id = bed_sizes[0].id if bed_sizes else None
+
+    ctx = common_context(request)
+    ctx.update(
+        {
+            "mode": "create",
+            "item": None,
+            "variant": None,
+            "bed_size_id": default_bed_size_id,
+            "furniture_categories": furniture_categories,
+            "bed_sizes": bed_sizes,
+        }
+    )
+    return TEMPLATES.TemplateResponse("furniture_form.html", ctx)
+
+
+@app.get("/inventory/furniture/{item_id}/edit", response_class=HTMLResponse)
+def inventory_furniture_edit(request: Request, item_id: int, db: Session = Depends(get_db)):
+    _ensure_inventory_seeded(db)
+
+    item = db.execute(select(FurnitureItem).where(FurnitureItem.id == item_id, FurnitureItem.is_active.is_(True))).scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    vs = crud.list_furniture_variants(db, furniture_item_id=item_id)
+    variant: FurnitureVariant | None = None
+    bed_size_id: int | None = None
+    if vs:
+        try:
+            variant = sorted(vs, key=lambda v: (v.bed_size_id is None, v.bed_size_id or 0, v.id))[0]
+        except Exception:
+            variant = vs[0]
+        bed_size_id = variant.bed_size_id
+
+    roots = crud.list_inventory_categories(db, type="FURNITURE", parent_id=None)
+    root_id = next((c.id for c in roots if (c.name or "").lower() == "furniture"), None)
+    furniture_categories: list[InventoryCategory] = []
+    if root_id is not None:
+        furniture_categories = crud.list_inventory_categories(db, type="FURNITURE", parent_id=root_id)
+
+    bed_sizes = crud.list_bed_sizes(db)
+
+    ctx = common_context(request)
+    ctx.update(
+        {
+            "mode": "edit",
+            "item": item,
+            "variant": variant,
+            "bed_size_id": bed_size_id,
+            "furniture_categories": furniture_categories,
+            "bed_sizes": bed_sizes,
+        }
+    )
+    return TEMPLATES.TemplateResponse("furniture_form.html", ctx)
 
 
 @app.post("/inventory/furniture", response_class=HTMLResponse)

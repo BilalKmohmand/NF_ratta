@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">{% if mode == 'edit' %}Edit{% else %}Add{% endif %} Furniture</h3>
+      <div class="text-muted">Create and manage furniture inventory</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/inventory/furniture">Back</a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post" action="/inventory/furniture" enctype="multipart/form-data">
+        {% if mode == 'edit' %}
+          <input type="hidden" name="item_id" value="{{ item.id }}" />
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Name</label>
+            <input class="form-control form-control-lg" name="name" value="{{ (item.name if item else '') }}" required placeholder="e.g., King Size Bed Set" />
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Category</label>
+            <select class="form-select form-select-lg" name="category_id" required>
+              <option value="">Select category</option>
+              {% for c in furniture_categories %}
+                <option value="{{ c.id }}" {% if item and item.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Size</label>
+            <select class="form-select form-select-lg" name="bed_size_id" required>
+              {% for s in bed_sizes %}
+                <option value="{{ s.id }}" {% if bed_size_id and bed_size_id == s.id %}selected{% endif %}>{{ s.label }}</option>
+              {% endfor %}
+              <option value="custom" {% if bed_size_id is none %}selected{% endif %}>Custom Size</option>
+            </select>
+            <div class="form-text">Choose "Custom Size" for non-standard</div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Material</label>
+            <select class="form-select form-select-lg" name="material_type">
+              {% set mt = (item.material_type if item else 'Wood') %}
+              <option value="Wood" {% if mt == 'Wood' %}selected{% endif %}>Wood</option>
+              <option value="Metal" {% if mt == 'Metal' %}selected{% endif %}>Metal</option>
+              <option value="MDF" {% if mt == 'MDF' %}selected{% endif %}>MDF</option>
+              <option value="Plywood" {% if mt == 'Plywood' %}selected{% endif %}>Plywood</option>
+              <option value="Other" {% if mt == 'Other' %}selected{% endif %}>Other</option>
+            </select>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Quantity</label>
+            <input class="form-control form-control-lg" name="qty_on_hand" type="number" min="0" value="{{ (variant.qty_on_hand if variant else 0) }}" required />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Cost Price (Rs.)</label>
+            <input class="form-control form-control-lg" name="cost_price_pkr" type="number" min="0" value="{{ (variant.cost_price_pkr if variant else 0) }}" required />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Selling Price (Rs.)</label>
+            <input class="form-control form-control-lg" name="sale_price_pkr" type="number" min="0" value="{{ (variant.sale_price_pkr if variant else 0) }}" required />
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Notes (Optional)</label>
+            <textarea class="form-control" rows="3" name="notes" placeholder="Any additional notes...">{{ (item.notes if item else '') }}</textarea>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Image (Upload)</label>
+            <input class="form-control" type="file" name="furniture_image" accept="image/*" />
+          </div>
+
+          {% if mode == 'edit' and (item.image_url or item.image_data) %}
+            <div class="col-12 col-md-6">
+              <label class="form-label">Current Image</label>
+              <div class="border rounded p-2 bg-body-tertiary">
+                <img src="{{ item.image_url or item.image_data }}" alt="{{ item.name }}" style="width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px;" />
+              </div>
+            </div>
+          {% endif %}
+
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Save</button>
+            <a class="btn btn-outline-secondary" href="/inventory/furniture">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

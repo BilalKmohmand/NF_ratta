@@ -6,9 +6,7 @@
     <h1 class="h3 fw-bold mb-1">Furniture Inventory</h1>
     <div class="text-secondary">Manage beds, almaris, showcases, and more</div>
   </div>
-  <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#furnitureModal">
-    Add Furniture
-  </button>
+  <a class="btn btn-primary btn-lg" href="/inventory/furniture/new">Add Furniture</a>
 </div>
 
 <div class="row g-3 align-items-end mb-4">
@@ -35,7 +33,7 @@
   <div class="card p-5 text-center">
     <div class="h5 fw-semibold mb-1">No furniture found</div>
     <div class="text-secondary mb-3">Get started by adding your first furniture item</div>
-    <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#furnitureModal">Add Furniture</button>
+    <a class="btn btn-primary" href="/inventory/furniture/new">Add Furniture</a>
   </div>
 {% else %}
   <div class="row g-3" id="furnitureGrid">
@@ -109,31 +107,12 @@
                 </button>
               {% endif %}
 
-              <button
-                class="btn btn-outline-secondary"
-                type="button"
-                data-bs-toggle="modal"
-                data-bs-target="#furnitureModal"
-                data-mode="edit"
-                data-item-id="{{ it.id }}"
-                data-name="{{ it.name }}"
-                data-category-id="{{ it.category_id }}"
-                data-sub-category-id="{{ it.sub_category_id or '' }}"
-                data-bed-size-id="{{ c.primary_bed_size_id or 'custom' }}"
-                data-material-type="{{ it.material_type or 'Wood' }}"
-                data-qty-on-hand="{{ c.primary_qty_on_hand }}"
-                data-cost-price-pkr="{{ c.primary_cost_price_pkr }}"
-                data-sale-price-pkr="{{ c.primary_sale_price_pkr }}"
-                data-image-url="{{ it.image_url or '' }}"
-                data-notes="{{ it.notes or '' }}"
-                aria-label="Edit"
-                title="Edit"
-              >
+              <a class="btn btn-outline-secondary" href="/inventory/furniture/{{ it.id }}/edit" aria-label="Edit" title="Edit">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
                   <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168z"/>
                   <path d="M11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207z"/>
                 </svg>
-              </button>
+              </a>
 
               <form method="post" action="/inventory/furniture/{{ it.id }}/delete" class="m-0">
                 <button class="btn btn-outline-danger" type="submit">Delete</button>
@@ -145,89 +124,6 @@
     {% endfor %}
   </div>
 {% endif %}
-
-<div class="modal fade" id="furnitureModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-scrollable modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="furnitureModalTitle">Add Furniture</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form method="post" action="/inventory/furniture" enctype="multipart/form-data">
-        <input type="hidden" name="item_id" id="furnitureItemId" />
-        <div class="modal-body pb-5">
-          <div class="row g-3">
-            <div class="col-12">
-              <label class="form-label">Name</label>
-              <input class="form-control form-control-lg" name="name" id="furnitureNameInput" required placeholder="e.g., King Size Bed Set" />
-            </div>
-
-            <div class="col-12 col-md-6">
-              <label class="form-label">Category</label>
-              <select class="form-select form-select-lg" name="category_id" id="furnitureCategorySelect" required>
-                <option value="">Select category</option>
-                {% for c in furniture_categories %}
-                  <option value="{{ c.id }}">{{ c.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div class="col-12 col-md-6">
-              <label class="form-label">Size</label>
-              <select class="form-select form-select-lg" name="bed_size_id" id="furnitureSizeSelect" required>
-                {% for s in bed_sizes %}
-                  <option value="{{ s.id }}">{{ s.label }}</option>
-                {% endfor %}
-                <option value="custom">Custom Size</option>
-              </select>
-              <div class="form-text">Choose "Custom Size" for non-standard</div>
-            </div>
-
-            <div class="col-12 col-md-6">
-              <label class="form-label">Material</label>
-              <select class="form-select form-select-lg" name="material_type" id="furnitureMaterialSelect">
-                <option value="Wood">Wood</option>
-                <option value="Metal">Metal</option>
-                <option value="MDF">MDF</option>
-                <option value="Plywood">Plywood</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-
-            <div class="col-12 col-md-4">
-              <label class="form-label">Quantity</label>
-              <input class="form-control form-control-lg" name="qty_on_hand" id="furnitureQtyInput" type="number" min="0" value="0" required />
-            </div>
-
-            <div class="col-12 col-md-4">
-              <label class="form-label">Cost Price (Rs.)</label>
-              <input class="form-control form-control-lg" name="cost_price_pkr" id="furnitureCostInput" type="number" min="0" value="0" required />
-            </div>
-
-            <div class="col-12 col-md-4">
-              <label class="form-label">Selling Price (Rs.)</label>
-              <input class="form-control form-control-lg" name="sale_price_pkr" id="furnitureSaleInput" type="number" min="0" value="0" required />
-            </div>
-
-            <div class="col-12">
-              <label class="form-label">Notes (Optional)</label>
-              <textarea class="form-control" rows="3" name="notes" id="furnitureNotesInput" placeholder="Any additional notes..."></textarea>
-            </div>
-
-            <div class="col-12 col-md-6">
-              <label class="form-label">Image (Upload)</label>
-              <input class="form-control" type="file" name="furniture_image" id="furnitureImageFile" accept="image/*" />
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer position-sticky bottom-0 bg-body" style="z-index: 10;">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary btn-lg" id="furnitureSubmitBtn">Add Furniture</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 
 <div class="modal fade" id="stockAdjustModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable">
@@ -306,92 +202,6 @@
         category.value = v;
         applyFilters();
       }
-    }
-
-    const catSelect = document.getElementById('furnitureCategorySelect');
-    const sizeSelect = document.getElementById('furnitureSizeSelect');
-    const furnitureModalEl = document.getElementById('furnitureModal');
-    const modalTitle = document.getElementById('furnitureModalTitle');
-    const submitBtn = document.getElementById('furnitureSubmitBtn');
-    const itemIdInput = document.getElementById('furnitureItemId');
-    const nameInput = document.getElementById('furnitureNameInput');
-    const materialSelect = document.getElementById('furnitureMaterialSelect');
-    const qtyInput = document.getElementById('furnitureQtyInput');
-    const costInput = document.getElementById('furnitureCostInput');
-    const saleInput = document.getElementById('furnitureSaleInput');
-    const notesInput = document.getElementById('furnitureNotesInput');
-    const imgFileInput = document.getElementById('furnitureImageFile');
-
-    function ensureDefaults() {
-      const presetCategoryId = document.getElementById('presetCategoryId');
-      if (presetCategoryId && catSelect) {
-        const v = presetCategoryId.value;
-        if (v) catSelect.value = v;
-      }
-      if (catSelect && !catSelect.value) {
-        const first = Array.from(catSelect.options).find((o) => !!o.value);
-        if (first) catSelect.value = first.value;
-      }
-      if (sizeSelect && !sizeSelect.value) {
-        const first = Array.from(sizeSelect.options).find((o) => !!o.value);
-        if (first) sizeSelect.value = first.value;
-      }
-    }
-
-    function setMode(mode) {
-      if (!modalTitle || !submitBtn) return;
-      if (mode === 'edit') {
-        modalTitle.textContent = 'Edit Furniture';
-        submitBtn.textContent = 'Save Changes';
-      } else {
-        modalTitle.textContent = 'Add Furniture';
-        submitBtn.textContent = 'Add Furniture';
-      }
-    }
-
-    function resetFormForAdd() {
-      setMode('add');
-      if (itemIdInput) itemIdInput.value = '';
-      if (nameInput) nameInput.value = '';
-      if (materialSelect) materialSelect.value = 'Wood';
-      if (qtyInput) qtyInput.value = '0';
-      if (costInput) costInput.value = '0';
-      if (saleInput) saleInput.value = '0';
-      if (notesInput) notesInput.value = '';
-      if (imgFileInput) imgFileInput.value = '';
-      ensureDefaults();
-    }
-
-    function fillFormForEdit(btn) {
-      setMode('edit');
-      if (itemIdInput) itemIdInput.value = btn.getAttribute('data-item-id') || '';
-      if (nameInput) nameInput.value = btn.getAttribute('data-name') || '';
-      if (catSelect) catSelect.value = btn.getAttribute('data-category-id') || '';
-
-      const bs = btn.getAttribute('data-bed-size-id') || '';
-      if (sizeSelect) sizeSelect.value = (bs === 'None' || bs === 'null' || bs === '') ? 'custom' : bs;
-      if (materialSelect) materialSelect.value = btn.getAttribute('data-material-type') || 'Wood';
-      if (qtyInput) qtyInput.value = btn.getAttribute('data-qty-on-hand') || '0';
-      if (costInput) costInput.value = btn.getAttribute('data-cost-price-pkr') || '0';
-      if (saleInput) saleInput.value = btn.getAttribute('data-sale-price-pkr') || '0';
-      if (imgFileInput) imgFileInput.value = '';
-      if (notesInput) notesInput.value = btn.getAttribute('data-notes') || '';
-    }
-
-    if (furnitureModalEl) {
-      furnitureModalEl.addEventListener('show.bs.modal', function (evt) {
-        const btn = evt.relatedTarget;
-        const isEdit = btn && btn.getAttribute && btn.getAttribute('data-mode') === 'edit';
-        if (isEdit) {
-          fillFormForEdit(btn);
-        } else {
-          resetFormForAdd();
-        }
-      });
-
-      furnitureModalEl.addEventListener('shown.bs.modal', function () {
-        if (nameInput) nameInput.focus();
-      });
     }
 
     const adjustModal = document.getElementById('stockAdjustModal');
