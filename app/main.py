@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -2460,3 +2460,193 @@ def analytics(
     )
 
     return TEMPLATES.TemplateResponse("analytics.html", ctx)
+
+
+def _month_label(*, year: int, month: int) -> str:
+    mn = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    m = int(month)
+    y = int(year)
+    if m < 1 or m > 12:
+        return f"{m}-{y}"
+    return f"{mn[m]}-{y}"
+
+
+def _compute_monthly_metrics(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    def key(r: dict[str, object]) -> int:
+        return int(r["year"]) * 100 + int(r["month"])
+
+    out = sorted(rows, key=key)
+    by_key = {(int(r["year"]), int(r["month"])): r for r in out}
+
+    for r in out:
+        y = int(r["year"])
+        m = int(r["month"])
+        r["period"] = _month_label(year=y, month=m)
+
+    for i, r in enumerate(out):
+        y = int(r["year"])
+        m = int(r["month"])
+        cur = int(r.get("total_sales_pkr") or 0)
+
+        mom = None
+        if i > 0:
+            prev = int(out[i - 1].get("total_sales_pkr") or 0)
+            if prev > 0:
+                mom = round(((cur - prev) / prev) * 100.0, 2)
+        r["mom_growth"] = mom
+
+        yoy = None
+        ly = by_key.get((y - 1, m))
+        if ly:
+            prev_y = int(ly.get("total_sales_pkr") or 0)
+            if prev_y > 0:
+                yoy = round(((cur - prev_y) / prev_y) * 100.0, 2)
+        r["yoy_growth"] = yoy
+
+        ytd = 0
+        for mm in range(1, m + 1):
+            rr = by_key.get((y, mm))
+            if rr:
+                ytd += int(rr.get("total_sales_pkr") or 0)
+        r["ytd_total"] = ytd
+
+    return out
+
+
+@app.get("/monthly-sales/analytics", response_class=HTMLResponse)
+def monthly_sales_analytics(request: Request, db: Session = Depends(get_db)):
+    ctx = common_context(request)
+    return TEMPLATES.TemplateResponse("monthly_sales_analytics.html", ctx)
+
+
+@app.get("/monthly-sales/api/records")
+def monthly_sales_api_records(
+    db: Session = Depends(get_db),
+    year: int | None = None,
+    month_from: int | None = None,
+    month_to: int | None = None,
+    last_n: int | None = None,
+):
+    manual = crud.list_monthly_sales_manual(db, year=year)
+    auto = crud.aggregate_monthly_sales_auto(db, category="Client")
+    merged = crud.merged_monthly_sales(manual=manual, auto=auto)
+
+    if year is not None:
+        merged = [r for r in merged if int(r["year"]) == int(year)]
+    if month_from is not None:
+        merged = [r for r in merged if int(r["month"]) >= int(month_from)]
+    if month_to is not None:
+        merged = [r for r in merged if int(r["month"]) <= int(month_to)]
+
+    merged = _compute_monthly_metrics(merged)
+    if last_n is not None and int(last_n) > 0:
+        merged = merged[-int(last_n) :]
+
+    years = sorted({int(r["year"]) for r in merged})
+    if not years:
+        years = sorted({int(r.year) for r in manual})
+
+    latest = merged[-1] if merged else None
+    best = max(merged, key=lambda r: int(r.get("total_sales_pkr") or 0)) if merged else None
+    avg = round(sum(int(r.get("total_sales_pkr") or 0) for r in merged) / len(merged)) if merged else 0
+    pred = None
+    if len(merged) >= 3:
+        last3 = [int(r.get("total_sales_pkr") or 0) for r in merged[-3:]]
+        pred = round(sum(last3) / 3)
+
+    summary = {
+        "years": years,
+        "latest": latest,
+        "best": best,
+        "avg": avg,
+        "prediction": pred,
+    }
+
+    return JSONResponse({"records": merged, "summary": summary})
+
+
+@app.post("/monthly-sales/api/manual/upsert")
+def monthly_sales_api_manual_upsert(
+    db: Session = Depends(get_db),
+    year: int = Form(...),
+    month: int = Form(...),
+    total_sales_pkr: int = Form(...),
+    total_bills: int | None = Form(None),
+    notes: str | None = Form(None),
+):
+    try:
+        obj = crud.upsert_monthly_sales_manual(
+            db,
+            year=int(year),
+            month=int(month),
+            total_sales_pkr=int(total_sales_pkr or 0),
+            total_bills=int(total_bills) if total_bills is not None else None,
+            notes=notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse({"ok": True, "id": obj.id})
+
+
+@app.post("/monthly-sales/api/manual/delete")
+def monthly_sales_api_manual_delete(
+    db: Session = Depends(get_db),
+    year: int = Form(...),
+    month: int = Form(...),
+):
+    ok = crud.delete_monthly_sales_manual(db, year=int(year), month=int(month))
+    return JSONResponse({"ok": ok})
+
+
+@app.post("/monthly-sales/api/import")
+def monthly_sales_api_import(db: Session = Depends(get_db), file: UploadFile = File(...)):
+    filename = (file.filename or "").lower()
+    raw = file.file.read()
+    created = 0
+    updated = 0
+    skipped = 0
+
+    def upsert_row(row: dict[str, object]) -> None:
+        nonlocal created, updated, skipped
+        try:
+            y = int(str(row.get("year") or "").strip())
+            m = int(str(row.get("month") or "").strip())
+            s = int(float(str(row.get("total_sales") or row.get("total_sales_pkr") or "").strip()))
+        except Exception:
+            skipped += 1
+            return
+        bills = row.get("total_bills")
+        notes = row.get("notes")
+
+        existing = crud.get_monthly_sales_manual(db, year=y, month=m)
+        obj = crud.upsert_monthly_sales_manual(
+            db,
+            year=y,
+            month=m,
+            total_sales_pkr=s,
+            total_bills=int(bills) if bills is not None and str(bills).strip() != "" else None,
+            notes=str(notes) if notes is not None and str(notes).strip() != "" else None,
+        )
+        if existing:
+            updated += 1
+        else:
+            created += 1
+
+    if filename.endswith(".csv"):
+        text = raw.decode("utf-8", errors="ignore")
+        reader = csv.DictReader(io.StringIO(text))
+        for row in reader:
+            upsert_row({k.strip().lower(): v for k, v in (row or {}).items()})
+    elif filename.endswith(".xlsx") or filename.endswith(".xls"):
+        try:
+            import pandas as pd
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Import requires pandas. Install pandas or upload CSV. ({e})")
+        df = pd.read_excel(io.BytesIO(raw))
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        for rec in df.to_dict(orient="records"):
+            upsert_row(rec)
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    return JSONResponse({"ok": True, "created": created, "updated": updated, "skipped": skipped})

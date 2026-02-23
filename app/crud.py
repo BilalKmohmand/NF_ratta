@@ -21,12 +21,150 @@ from .models import (
     FurnitureItem,
     FurnitureVariant,
     InventoryCategory,
+    MonthlySales,
+    MonthlySalesCategory,
     PoshishMaterial,
     SofaItem,
     StockMovement,
     Transaction,
     WeeklyAssignment,
 )
+
+
+def list_monthly_sales_manual(db: Session, *, year: int | None = None) -> list[MonthlySales]:
+    stmt = select(MonthlySales).where(MonthlySales.source == "manual", MonthlySales.is_active.is_(True))
+    if year:
+        stmt = stmt.where(MonthlySales.year == int(year))
+    stmt = stmt.order_by(MonthlySales.year.asc(), MonthlySales.month.asc(), MonthlySales.id.asc())
+    return list(db.execute(stmt).scalars().all())
+
+
+def get_monthly_sales_manual(db: Session, *, year: int, month: int) -> MonthlySales | None:
+    return db.execute(
+        select(MonthlySales).where(
+            MonthlySales.source == "manual",
+            MonthlySales.is_active.is_(True),
+            MonthlySales.year == int(year),
+            MonthlySales.month == int(month),
+        )
+    ).scalar_one_or_none()
+
+
+def upsert_monthly_sales_manual(
+    db: Session,
+    *,
+    year: int,
+    month: int,
+    total_sales_pkr: int,
+    total_bills: int | None = None,
+    notes: str | None = None,
+) -> MonthlySales:
+    year_i = int(year)
+    month_i = int(month)
+    if month_i < 1 or month_i > 12:
+        raise ValueError("Invalid month")
+
+    existing = get_monthly_sales_manual(db, year=year_i, month=month_i)
+    if existing:
+        existing.total_sales_pkr = int(total_sales_pkr or 0)
+        existing.total_bills = int(total_bills) if total_bills is not None and str(total_bills).strip() != "" else None
+        existing.notes = notes or None
+        db.add(existing)
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    obj = MonthlySales(
+        year=year_i,
+        month=month_i,
+        total_sales_pkr=int(total_sales_pkr or 0),
+        total_bills=int(total_bills) if total_bills is not None and str(total_bills).strip() != "" else None,
+        notes=notes or None,
+        source="manual",
+        is_active=True,
+    )
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def delete_monthly_sales_manual(db: Session, *, year: int, month: int) -> bool:
+    obj = get_monthly_sales_manual(db, year=int(year), month=int(month))
+    if not obj:
+        return False
+    obj.is_active = False
+    db.add(obj)
+    db.commit()
+    return True
+
+
+def aggregate_monthly_sales_auto(
+    db: Session,
+    *,
+    from_date: dt.date | None = None,
+    to_date: dt.date | None = None,
+    category: str = "Client",
+) -> dict[tuple[int, int], dict[str, int]]:
+    stmt = select(Transaction).where(
+        Transaction.is_deleted.is_(False),
+        Transaction.type == "incoming",
+        Transaction.category == category,
+    )
+    if from_date:
+        stmt = stmt.where(Transaction.date >= from_date)
+    if to_date:
+        stmt = stmt.where(Transaction.date <= to_date)
+    stmt = stmt.order_by(Transaction.date.asc(), Transaction.id.asc())
+
+    rows = list(db.execute(stmt).scalars().all())
+    out: dict[tuple[int, int], dict[str, int]] = {}
+    for tx in rows:
+        y = int(tx.date.year)
+        m = int(tx.date.month)
+        key = (y, m)
+        slot = out.setdefault(key, {"total_sales_pkr": 0, "total_bills": 0})
+        slot["total_sales_pkr"] += int(tx.amount_pkr or 0)
+        # bill_no is optional; count it only if present
+        if tx.bill_no and str(tx.bill_no).strip():
+            slot["total_bills"] += 1
+    return out
+
+
+def merged_monthly_sales(
+    *,
+    manual: list[MonthlySales],
+    auto: dict[tuple[int, int], dict[str, int]],
+) -> list[dict[str, object]]:
+    manual_map: dict[tuple[int, int], MonthlySales] = {(int(r.year), int(r.month)): r for r in manual}
+    keys = set(auto.keys()) | set(manual_map.keys())
+    merged = []
+    for (y, m) in sorted(keys):
+        if (y, m) in manual_map:
+            r = manual_map[(y, m)]
+            merged.append(
+                {
+                    "year": int(r.year),
+                    "month": int(r.month),
+                    "total_sales_pkr": int(r.total_sales_pkr or 0),
+                    "total_bills": int(r.total_bills) if r.total_bills is not None else None,
+                    "source": "manual",
+                    "notes": r.notes or "",
+                }
+            )
+        else:
+            slot = auto.get((y, m), {"total_sales_pkr": 0, "total_bills": 0})
+            merged.append(
+                {
+                    "year": int(y),
+                    "month": int(m),
+                    "total_sales_pkr": int(slot.get("total_sales_pkr") or 0),
+                    "total_bills": int(slot.get("total_bills") or 0),
+                    "source": "auto",
+                    "notes": "",
+                }
+            )
+    return merged
 
 
 def create_client(db: Session, *, name: str, phone: str, address: str | None, notes: str | None) -> Client:

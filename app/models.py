@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 
 from .db import Base
@@ -32,6 +32,43 @@ class Employee(Base):
     cnic_image_url = Column(String(512), nullable=True)
     profile_image_data = Column(Text, nullable=True)
     cnic_image_data = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class MonthlySales(Base):
+    __tablename__ = "monthly_sales"
+    __table_args__ = (UniqueConstraint("year", "month", "source", name="uq_monthly_sales_year_month_source"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    year = Column(Integer, nullable=False, index=True)
+    month = Column(Integer, nullable=False, index=True)
+
+    total_sales_pkr = Column(Integer, nullable=False, default=0)
+    total_bills = Column(Integer, nullable=True)
+
+    # manual: uploaded/entered historical data
+    # auto: calculated from live transactions
+    source = Column(String(16), nullable=False, default="manual", index=True)
+
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class MonthlySalesCategory(Base):
+    __tablename__ = "monthly_sales_categories"
+    __table_args__ = (UniqueConstraint("monthly_sales_id", "category", name="uq_monthly_sales_cat"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    monthly_sales_id = Column(Integer, ForeignKey("monthly_sales.id"), nullable=False, index=True)
+    category = Column(String(128), nullable=False, index=True)
+    amount_pkr = Column(Integer, nullable=False, default=0)
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
