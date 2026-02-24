@@ -148,6 +148,29 @@
       </div>
     </div>
 
+    <div class="filter-bar" style="margin-bottom:14px">
+      <span class="flt-h">MONTH ACROSS YEARS</span>
+      <select id="cmpMonthAcross" style="width:160px" onchange="loadMonthAcrossYears()">
+        <option value="">Select month</option>
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+    </div>
+    <div class="chart-card" style="margin-bottom:20px">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title" id="moyTitle">Month Comparison (across years)</div>
+          <div class="chart-subtitle">Compare the same month over multiple years</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="dlChart('monthAcrossChart','month_across_years')">⬇</button>
+      </div>
+      <canvas id="monthAcrossChart"></canvas>
+    </div>
+
     <div class="section-label">Records</div>
     <div class="table-card">
       <div class="table-header">
@@ -263,30 +286,32 @@
   <style>
     .nfsa { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
     .nfsa {
-      --bg:          #161b27;
-      --bg-card:     #1e2535;
-      --bg-card-2:   #252d3d;
-      --bg-input:    #2a3347;
-      --border:      rgba(255,255,255,0.08);
-      --border-card: rgba(255,255,255,0.06);
-      --blue:        #3b82f6;
-      --blue-hover:  #2563eb;
-      --blue-dim:    rgba(59,130,246,0.12);
-      --green:       #22c55e;
-      --green-dim:   rgba(34,197,94,0.12);
-      --red:         #ef4444;
-      --red-dim:     rgba(239,68,68,0.12);
-      --amber:       #f59e0b;
-      --text-1: #f1f5f9;
-      --text-2: #94a3b8;
-      --text-3: #64748b;
+      --bg:          var(--bs-body-bg);
+      --bg-card:     color-mix(in srgb, var(--bs-body-bg) 78%, transparent);
+      --bg-card-2:   color-mix(in srgb, var(--bs-body-bg) 88%, transparent);
+      --bg-input:    color-mix(in srgb, var(--bs-body-bg) 92%, transparent);
+      --border:      color-mix(in srgb, var(--bs-border-color) 75%, transparent);
+      --border-card: color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+
+      --blue:        var(--bs-primary);
+      --blue-hover:  color-mix(in srgb, var(--bs-primary) 85%, #000);
+      --blue-dim:    color-mix(in srgb, var(--bs-primary) 18%, transparent);
+      --green:       var(--bs-success);
+      --green-dim:   color-mix(in srgb, var(--bs-success) 18%, transparent);
+      --red:         var(--bs-danger);
+      --red-dim:     color-mix(in srgb, var(--bs-danger) 18%, transparent);
+      --amber:       var(--bs-warning);
+
+      --text-1: var(--bs-body-color);
+      --text-2: color-mix(in srgb, var(--bs-body-color) 70%, transparent);
+      --text-3: color-mix(in srgb, var(--bs-body-color) 55%, transparent);
       --radius-card: 14px;
       --radius-sm:   8px;
       --radius-pill: 999px;
       --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2);
     }
 
-    body { background: var(--bg); color: var(--text-1); }
+    .nfsa { color: var(--text-1); }
 
     .hero { background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-card); padding: 32px 36px; position: relative; overflow: hidden; }
     .hero::after { content: ''; position: absolute; top:0; right:0; bottom:0; width: 40%; background: radial-gradient(ellipse at right center, rgba(59,130,246,0.08) 0%, transparent 70%); pointer-events:none; }
@@ -379,7 +404,7 @@
     .edit-btn { padding: 4px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-2); font-size: 12px; cursor:pointer; transition: all .15s; }
     .edit-btn:hover { border-color: var(--blue); color: var(--blue); }
 
-    .overlay { display:none; position: fixed; inset:0; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 500; align-items: center; justify-content: center; }
+    .overlay { display:none; position: fixed; inset:0; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 2500; align-items: center; justify-content: center; }
     .overlay.open { display:flex; }
 
     .modal { background: var(--bg-card); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-card); padding: 28px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y:auto; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
@@ -444,7 +469,7 @@
   <script>
     let allRecs = [];
     let periodsShown = 12;
-    let chartTrend, chartYearly, chartCat;
+    let chartTrend, chartYearly, chartCat, chartMonthAcross;
     let impFile = null;
 
     const MN = ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -463,9 +488,15 @@
       padding: 10,
     };
 
-    function openModal(id)  { document.getElementById(id).classList.add('open'); }
+    function openModal(id)  {
+      document.getElementById(id).classList.add('open');
+      document.body.classList.add('modal-open');
+    }
     function closeModal(id) {
       document.getElementById(id).classList.remove('open');
+      if (!document.querySelector('.overlay.open')) {
+        document.body.classList.remove('modal-open');
+      }
       if (id === 'addModal') document.getElementById('addErr').style.display = 'none';
       if (id === 'importModal') {
         impFile = null;
@@ -746,6 +777,56 @@
       else { chartCat = new Chart(el, cfg); }
     }
 
+    function loadMonthAcrossYears() {
+      const m = Number(document.getElementById('cmpMonthAcross').value || 0);
+      const title = document.getElementById('moyTitle');
+      if (!m) {
+        if (title) title.textContent = 'Month Comparison (across years)';
+        const el = document.getElementById('monthAcrossChart');
+        if (chartMonthAcross) {
+          chartMonthAcross.data = { labels: [], datasets: [{ data: [] }] };
+          chartMonthAcross.update();
+        } else {
+          chartMonthAcross = new Chart(el, { type: 'bar', data: { labels: [], datasets: [{ data: [] }] }, options: { responsive: true } });
+        }
+        return;
+      }
+
+      const rows = allRecs.filter(r => Number(r.month) === m).sort((a,b) => Number(a.year) - Number(b.year));
+      const labels = rows.map(r => String(r.year));
+      const data = rows.map(r => Number(r.total_sales_pkr || 0));
+      if (title) title.textContent = `${MN[m]} (across years)`;
+
+      const cfg = {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: `Sales in ${MN[m]}`,
+            data,
+            backgroundColor: 'rgba(13,110,253,0.55)',
+            borderRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: { ...TT_BASE, callbacks: { label: c => ` Rs ${Number(c.parsed.y||0).toLocaleString()}` } }
+          },
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { callback: v => 'Rs ' + compact(v) } }
+          }
+        }
+      };
+
+      const el = document.getElementById('monthAcrossChart');
+      if (chartMonthAcross) { chartMonthAcross.data = cfg.data; chartMonthAcross.update(); }
+      else { chartMonthAcross = new Chart(el, cfg); }
+    }
+
     function loadTable() {
       const tbody = document.getElementById('recTable');
       if (!allRecs.length) {
@@ -789,6 +870,7 @@
         loadTrend();
         loadYearly();
         loadSplit();
+        loadMonthAcrossYears();
         loadTable();
       } catch (e) {
         toast('err', 'Failed to load monthly sales');
