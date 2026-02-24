@@ -407,7 +407,7 @@
     .overlay { display:none; position: fixed; inset:0; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 2500; align-items: center; justify-content: center; }
     .overlay.open { display:flex; }
 
-    .modal { background: var(--bg-card); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-card); padding: 28px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y:auto; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    .modal { display: block; background: var(--bg-card); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-card); padding: 28px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y:auto; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
     .modal-close { position:absolute; top: 16px; right: 16px; width: 30px; height: 30px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text-3); display:flex; align-items:center; justify-content:center; cursor:pointer; transition: all .15s; }
     .modal-close:hover { color: var(--red); border-color: var(--red); }
 
