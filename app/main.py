@@ -2528,7 +2528,7 @@ def monthly_sales_api_records(
     last_n: int | None = None,
 ):
     manual = crud.list_monthly_sales_manual(db, year=year)
-    auto = crud.aggregate_monthly_sales_auto(db, category="Client")
+    auto = crud.aggregate_monthly_sales_auto(db)
     merged = crud.merged_monthly_sales(manual=manual, auto=auto)
 
     if year is not None:

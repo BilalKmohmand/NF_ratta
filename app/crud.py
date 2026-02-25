@@ -104,30 +104,23 @@ def aggregate_monthly_sales_auto(
     *,
     from_date: dt.date | None = None,
     to_date: dt.date | None = None,
-    category: str = "Client",
 ) -> dict[tuple[int, int], dict[str, int]]:
-    stmt = select(Transaction).where(
-        Transaction.is_deleted.is_(False),
-        Transaction.type == "incoming",
-        Transaction.category == category,
-    )
+    stmt = select(Bill)
     if from_date:
-        stmt = stmt.where(Transaction.date >= from_date)
+        stmt = stmt.where(Bill.date >= from_date)
     if to_date:
-        stmt = stmt.where(Transaction.date <= to_date)
-    stmt = stmt.order_by(Transaction.date.asc(), Transaction.id.asc())
+        stmt = stmt.where(Bill.date <= to_date)
+    stmt = stmt.order_by(Bill.date.asc(), Bill.id.asc())
 
     rows = list(db.execute(stmt).scalars().all())
     out: dict[tuple[int, int], dict[str, int]] = {}
-    for tx in rows:
-        y = int(tx.date.year)
-        m = int(tx.date.month)
+    for bill in rows:
+        y = int(bill.date.year)
+        m = int(bill.date.month)
         key = (y, m)
         slot = out.setdefault(key, {"total_sales_pkr": 0, "total_bills": 0})
-        slot["total_sales_pkr"] += int(tx.amount_pkr or 0)
-        # bill_no is optional; count it only if present
-        if tx.bill_no and str(tx.bill_no).strip():
-            slot["total_bills"] += 1
+        slot["total_sales_pkr"] += int(bill.grand_total_pkr or 0)
+        slot["total_bills"] += 1
     return out
 
 
