@@ -451,9 +451,9 @@ def pending_bills(request: Request, db: Session = Depends(get_db), q: str | None
 
 
 @app.get("/employees", response_class=HTMLResponse)
-def employees(request: Request, db: Session = Depends(get_db), status: str | None = None):
+def employees(request: Request, db: Session = Depends(get_db), status: str | None = None, sync: int | None = None):
     global _EMPLOYEE_BACKFILL_RAN
-    if not _EMPLOYEE_BACKFILL_RAN and os.getenv("DISABLE_EMPLOYEE_BACKFILL", "").strip() != "1":
+    if sync == 1 and not _EMPLOYEE_BACKFILL_RAN and os.getenv("DISABLE_EMPLOYEE_BACKFILL", "").strip() != "1":
         _backfill_employees_from_transactions(db)
         _EMPLOYEE_BACKFILL_RAN = True
     items = crud.list_employees(db, status=status)
