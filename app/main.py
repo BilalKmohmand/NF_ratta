@@ -151,6 +151,21 @@ def on_startup() -> None:
         except Exception:
             return
 
+        try:
+            insp_local = inspect(engine)
+            bill_cols = {c["name"] for c in insp_local.get_columns("bills")}
+            if "is_deleted" not in bill_cols:
+                try:
+                    with engine.begin() as conn:
+                        if IS_SQLITE:
+                            conn.execute(text("ALTER TABLE bills ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0"))
+                        else:
+                            conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE"))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         if not IS_SQLITE:
             try:
                 insp = inspect(engine)
@@ -384,11 +399,100 @@ def bill_detail(request: Request, bill_id: int, db: Session = Depends(get_db)):
     b = crud.get_bill(db, bill_id)
     if not b:
         raise HTTPException(status_code=404, detail="Bill not found")
+    if getattr(b, "is_deleted", False):
+        raise HTTPException(status_code=404, detail="Bill not found")
     items = crud.list_bill_items(db, bill_id=bill_id)
     payments = crud.list_bill_payments(db, bill_id=bill_id)
     ctx = common_context(request)
     ctx.update({"bill": b, "items": items, "payments": payments})
     return TEMPLATES.TemplateResponse("bill_detail.html", ctx)
+
+
+@app.get("/bills/{bill_id}/edit", response_class=HTMLResponse)
+def bill_edit(request: Request, bill_id: int, db: Session = Depends(get_db)):
+    b = crud.get_bill(db, bill_id)
+    if not b or getattr(b, "is_deleted", False):
+        raise HTTPException(status_code=404, detail="Bill not found")
+    items = crud.list_bill_items(db, bill_id=bill_id)
+    ctx = common_context(request)
+    ctx.update({"bill": b, "items": items, "clients": crud.list_clients(db, limit=500)})
+    return TEMPLATES.TemplateResponse("bill_edit.html", ctx)
+
+
+@app.post("/bills/{bill_id}/edit", response_class=HTMLResponse)
+def bill_edit_post(
+    request: Request,
+    bill_id: int,
+    db: Session = Depends(get_db),
+    bill_no: int = Form(...),
+    date: str = Form(...),
+    client_id: str | None = Form(None),
+    customer_name: str = Form(...),
+    customer_phone: str | None = Form(None),
+    customer_address: str | None = Form(None),
+    discount_pkr: int = Form(0),
+    item_description: list[str] = Form(...),
+    item_quantity: list[int] = Form(...),
+    item_rate_pkr: list[int] = Form(...),
+):
+    b = crud.get_bill(db, bill_id)
+    if not b or getattr(b, "is_deleted", False):
+        raise HTTPException(status_code=404, detail="Bill not found")
+
+    parsed_date = parse_date(date) or dt.date.today()
+
+    parsed_client_id: int | None = None
+    try:
+        if client_id is not None and str(client_id).strip():
+            parsed_client_id = int(str(client_id).strip())
+    except Exception:
+        parsed_client_id = None
+
+    descs = [d.strip() for d in (item_description or []) if (d or "").strip()]
+    qtys = list(item_quantity or [])
+    rates = list(item_rate_pkr or [])
+    if not descs:
+        raise HTTPException(status_code=400, detail="At least one item is required")
+
+    subtotal = 0
+    for idx, d in enumerate(descs):
+        qty = int(qtys[idx]) if idx < len(qtys) else 1
+        rate = int(rates[idx]) if idx < len(rates) else 0
+        qty = max(1, qty)
+        rate = max(0, rate)
+        subtotal += qty * rate
+
+    discount = max(0, int(discount_pkr or 0))
+    grand_total = max(0, subtotal - discount)
+
+    crud.update_bill_header(
+        db,
+        bill=b,
+        bill_no=int(bill_no),
+        date=parsed_date,
+        client_id=parsed_client_id,
+        customer_name=customer_name.strip(),
+        customer_phone=customer_phone,
+        customer_address=customer_address,
+        discount_pkr=discount,
+    )
+    crud.replace_bill_items(db, bill_id=b.id, descriptions=descs, quantities=qtys, rates=rates)
+
+    b.subtotal_pkr = int(subtotal)
+    b.discount_pkr = int(discount)
+    b.grand_total_pkr = int(grand_total)
+    crud.recalc_bill_totals(db, b)
+
+    return RedirectResponse(url=f"/bills/{b.id}", status_code=303)
+
+
+@app.post("/bills/{bill_id}/delete", response_class=HTMLResponse)
+def bill_delete(request: Request, bill_id: int, db: Session = Depends(get_db)):
+    b = crud.get_bill(db, bill_id)
+    if not b or getattr(b, "is_deleted", False):
+        raise HTTPException(status_code=404, detail="Bill not found")
+    crud.soft_delete_bill(db, bill=b)
+    return RedirectResponse(url="/bills", status_code=303)
 
 
 @app.post("/bills/{bill_id}/payment", response_class=HTMLResponse)

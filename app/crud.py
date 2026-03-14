@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 
-from sqlalchemy import and_, case, func, or_, select, update as sql_update
+from sqlalchemy import and_, case, delete, func, or_, select, update as sql_update
 from sqlalchemy.orm import Session
 
 from .models import (
@@ -238,7 +238,7 @@ def create_bill(
 
 
 def list_bills(db: Session, *, q: str | None = None, status: str | None = None, limit: int = 500) -> list[Bill]:
-    stmt = select(Bill).order_by(Bill.date.desc(), Bill.bill_no.desc(), Bill.id.desc())
+    stmt = select(Bill).where(Bill.is_deleted.is_(False)).order_by(Bill.date.desc(), Bill.bill_no.desc(), Bill.id.desc())
     if status and status.strip():
         stmt = stmt.where(Bill.status == status.strip())
     if q and q.strip():
@@ -256,6 +256,48 @@ def list_bills(db: Session, *, q: str | None = None, status: str | None = None, 
 
 def get_bill(db: Session, bill_id: int) -> Bill | None:
     return db.execute(select(Bill).where(Bill.id == bill_id)).scalar_one_or_none()
+
+
+def update_bill_header(
+    db: Session,
+    *,
+    bill: Bill,
+    bill_no: int,
+    date: dt.date,
+    client_id: int | None,
+    customer_name: str,
+    customer_phone: str | None,
+    customer_address: str | None,
+    discount_pkr: int,
+) -> Bill:
+    bill.bill_no = int(bill_no)
+    bill.date = date
+    bill.client_id = client_id
+    bill.customer_name = customer_name
+    bill.customer_phone = customer_phone or None
+    bill.customer_address = customer_address or None
+    bill.discount_pkr = max(0, int(discount_pkr or 0))
+    db.add(bill)
+    db.commit()
+    db.refresh(bill)
+    return bill
+
+
+def replace_bill_items(
+    db: Session,
+    *,
+    bill_id: int,
+    descriptions: list[str],
+    quantities: list[int],
+    rates: list[int],
+) -> None:
+    db.execute(delete(BillItem).where(BillItem.bill_id == bill_id))
+    db.commit()
+
+    for idx, d in enumerate(descriptions or []):
+        qty = int(quantities[idx]) if idx < len(quantities) else 1
+        rate = int(rates[idx]) if idx < len(rates) else 0
+        add_bill_item(db, bill_id=bill_id, description=d, quantity=qty, rate_pkr=rate)
 
 
 def list_bill_items(db: Session, *, bill_id: int) -> list[BillItem]:
@@ -342,7 +384,12 @@ def create_bill_payment(
 
 
 def list_pending_bills(db: Session, *, q: str | None = None, limit: int = 500) -> list[Bill]:
-    stmt = select(Bill).where(Bill.status != "Paid").order_by(Bill.date.desc(), Bill.bill_no.desc(), Bill.id.desc())
+    stmt = (
+        select(Bill)
+        .where(Bill.is_deleted.is_(False))
+        .where(Bill.status != "Paid")
+        .order_by(Bill.date.desc(), Bill.bill_no.desc(), Bill.id.desc())
+    )
     if q and q.strip():
         qq = f"%{q.strip().lower()}%"
         stmt = stmt.where(
@@ -358,11 +405,18 @@ def list_pending_bills(db: Session, *, q: str | None = None, limit: int = 500) -
 def list_bills_for_client(db: Session, *, client_id: int, limit: int = 500) -> list[Bill]:
     stmt = (
         select(Bill)
+        .where(Bill.is_deleted.is_(False))
         .where(Bill.client_id == client_id)
         .order_by(Bill.date.desc(), Bill.bill_no.desc(), Bill.id.desc())
         .limit(limit)
     )
     return list(db.execute(stmt).scalars().all())
+
+
+def soft_delete_bill(db: Session, *, bill: Bill) -> None:
+    bill.is_deleted = True
+    db.add(bill)
+    db.commit()
 
 
 def create_transaction(

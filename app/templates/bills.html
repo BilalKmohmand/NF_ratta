@@ -78,7 +78,13 @@
             </div>
           </div>
           <div class="card-footer d-flex align-items-center justify-content-end">
-            <a class="btn btn-sm btn-outline-secondary" href="/bills/{{ b.id }}">View</a>
+            <div class="d-flex gap-2">
+              <a class="btn btn-sm btn-outline-secondary" href="/bills/{{ b.id }}">View</a>
+              <a class="btn btn-sm btn-outline-primary" href="/bills/{{ b.id }}/edit">Edit</a>
+              <form method="post" action="/bills/{{ b.id }}/delete" onsubmit="return confirm('Delete this bill?');">
+                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+              </form>
+            </div>
           </div>
         </div>
       </div>

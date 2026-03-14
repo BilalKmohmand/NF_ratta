@@ -8,6 +8,10 @@
     </div>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-secondary" href="/bills">Back</a>
+      <a class="btn btn-outline-primary" href="/bills/{{ bill.id }}/edit">Edit</a>
+      <form method="post" action="/bills/{{ bill.id }}/delete" onsubmit="return confirm('Delete this bill?');">
+        <button class="btn btn-outline-danger" type="submit">Delete</button>
+      </form>
       {% if bill.status != 'Paid' %}
         <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#payModal">Add Payment</button>
       {% endif %}

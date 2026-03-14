@@ -73,7 +73,13 @@
               <td class="text-end">{{ pkr_format(b.paid_amount_pkr) }}</td>
               <td class="text-end">{{ pkr_format(b.balance_pkr) }}</td>
               <td class="text-end">
-                <a class="btn btn-sm btn-outline-secondary" href="/bills/{{ b.id }}">View</a>
+                <div class="d-flex justify-content-end gap-2">
+                  <a class="btn btn-sm btn-outline-secondary" href="/bills/{{ b.id }}">View</a>
+                  <a class="btn btn-sm btn-outline-primary" href="/bills/{{ b.id }}/edit">Edit</a>
+                  <form method="post" action="/bills/{{ b.id }}/delete" onsubmit="return confirm('Delete this bill?');">
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                  </form>
+                </div>
               </td>
             </tr>
           {% endfor %}

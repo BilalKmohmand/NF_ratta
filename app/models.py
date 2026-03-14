@@ -221,6 +221,8 @@ class Bill(Base):
     balance_pkr = Column(Integer, nullable=False, default=0)
     status = Column(String(16), nullable=False, default="Pending", index=True)
 
+    is_deleted = Column(Boolean, nullable=False, default=False, index=True)
+
     payment_method = Column(String(32), nullable=True)
     payment_notes = Column(Text, nullable=True)
 
