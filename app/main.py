@@ -152,27 +152,6 @@ def on_startup() -> None:
         except Exception:
             return
 
-        try:
-            insp_local = inspect(engine)
-            bill_cols = {c["name"] for c in insp_local.get_columns("bills")}
-            if "is_deleted" not in bill_cols:
-                try:
-                    with engine.begin() as conn:
-                        if IS_SQLITE:
-                            conn.execute(text("ALTER TABLE bills ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0"))
-                        else:
-                            conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE"))
-                except Exception:
-                    pass
-
-            try:
-                with engine.begin() as conn:
-                    conn.execute(text("UPDATE bills SET bill_no = -id WHERE is_deleted = 1 AND bill_no > 0"))
-            except Exception:
-                pass
-        except Exception:
-            pass
-
         if not IS_SQLITE:
             try:
                 insp = inspect(engine)
@@ -228,6 +207,26 @@ def on_startup() -> None:
                             conn.execute(text(stmt))
             except Exception:
                 pass
+
+
+    if not IS_SQLITE:
+        try:
+            insp = inspect(engine)
+            bill_cols = {c["name"] for c in insp.get_columns("bills")}
+            if "is_deleted" not in bill_cols:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE"))
+                except Exception:
+                    pass
+
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("UPDATE bills SET bill_no = -id WHERE is_deleted = TRUE AND bill_no > 0"))
+            except Exception:
+                pass
+        except Exception:
+            pass
 
 
 def _is_logged_in(request: Request) -> bool:
