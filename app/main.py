@@ -27,6 +27,7 @@ from reportlab.graphics.charts.linecharts import HorizontalLineChart
 from reportlab.graphics.charts.piecharts import Pie
 from reportlab.graphics.charts.legends import Legend
 from sqlalchemy import inspect, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import crud
@@ -163,6 +164,12 @@ def on_startup() -> None:
                             conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE"))
                 except Exception:
                     pass
+
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("UPDATE bills SET bill_no = -id WHERE is_deleted = 1 AND bill_no > 0"))
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -348,21 +355,28 @@ def bills_new_post(
     if paid > grand_total:
         paid = grand_total
 
-    b = crud.create_bill(
-        db,
-        bill_no=int(bill_no),
-        date=parsed_date,
-        client_id=parsed_client_id,
-        customer_name=customer_name.strip(),
-        customer_phone=customer_phone,
-        customer_address=customer_address,
-        subtotal_pkr=subtotal,
-        discount_pkr=discount,
-        grand_total_pkr=grand_total,
-        paid_amount_pkr=0,
-        payment_method=payment_method,
-        payment_notes=payment_notes,
-    )
+    try:
+        b = crud.create_bill(
+            db,
+            bill_no=int(bill_no),
+            date=parsed_date,
+            client_id=parsed_client_id,
+            customer_name=customer_name.strip(),
+            customer_phone=customer_phone,
+            customer_address=customer_address,
+            subtotal_pkr=subtotal,
+            discount_pkr=discount,
+            grand_total_pkr=grand_total,
+            paid_amount_pkr=0,
+            payment_method=payment_method,
+            payment_notes=payment_notes,
+        )
+    except IntegrityError:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=400, detail=f"Bill #{int(bill_no)} already exists")
 
     for idx, d in enumerate(descs):
         qty = int(qtys[idx]) if idx < len(qtys) else 1

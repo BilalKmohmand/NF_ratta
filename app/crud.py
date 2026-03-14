@@ -415,6 +415,7 @@ def list_bills_for_client(db: Session, *, client_id: int, limit: int = 500) -> l
 
 def soft_delete_bill(db: Session, *, bill: Bill) -> None:
     bill.is_deleted = True
+    bill.bill_no = -int(bill.id)
     db.add(bill)
     db.commit()
 
