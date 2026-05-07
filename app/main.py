@@ -2066,6 +2066,77 @@ def transactions(
     return TEMPLATES.TemplateResponse("transactions.html", ctx)
 
 
+@app.get("/transactions/fast", response_class=HTMLResponse)
+def transactions_fast(request: Request, db: Session = Depends(get_db), date: str | None = None):
+    parsed_date = parse_date(date) or dt.date.today()
+    ctx = common_context(request)
+    ctx.update(
+        {
+            "fast_date": parsed_date.isoformat(),
+            "fast_presets": [
+                {"type": "outgoing", "category": "Employee", "name": "Murtaza"},
+                {"type": "outgoing", "category": "Employee", "name": "Bilal"},
+                {"type": "outgoing", "category": "Polish Wala", "name": "Polish Wala"},
+                {"type": "outgoing", "category": "Poshish", "name": ""},
+                {"type": "outgoing", "category": "Zaati Kharcha", "name": "Zaati Kharcha"},
+                {"type": "outgoing", "category": "Chai / Nashta", "name": "Chai / Nashta"},
+                {"type": "outgoing", "category": "Rent", "name": "Rent"},
+                {"type": "outgoing", "category": "Utilities", "name": "Bijli Bill"},
+                {"type": "incoming", "category": "Shop", "name": "Shop Sale"},
+                {"type": "incoming", "category": "Client", "name": "Client Payment"},
+            ],
+        }
+    )
+    return TEMPLATES.TemplateResponse("transactions_fast.html", ctx)
+
+
+@app.post("/transactions/fast", response_class=HTMLResponse)
+def transactions_fast_post(
+    request: Request,
+    db: Session = Depends(get_db),
+    date: str = Form(...),
+    type: list[str] = Form(...),
+    category: list[str] = Form(...),
+    name: list[str] = Form(...),
+    amount_pkr: list[int] = Form(...),
+):
+    parsed_date = parse_date(date) or dt.date.today()
+
+    rows = max(len(type or []), len(category or []), len(name or []), len(amount_pkr or []))
+    created = 0
+    for i in range(rows):
+        t = (type[i] if i < len(type) else "").strip()
+        c = (category[i] if i < len(category) else "").strip()
+        n = (name[i] if i < len(name) else "")
+        try:
+            amt = int(amount_pkr[i]) if i < len(amount_pkr) else 0
+        except Exception:
+            amt = 0
+
+        if amt <= 0:
+            continue
+        if t not in {"incoming", "outgoing"}:
+            continue
+
+        errs = validate_form(t, c, None, amt)
+        if errs:
+            continue
+
+        crud.create_transaction(
+            db,
+            type=t,
+            date=parsed_date,
+            amount_pkr=int(amt),
+            category=c,
+            name=(n or "").strip() or None,
+            bill_no=None,
+            notes="fast",
+        )
+        created += 1
+
+    return RedirectResponse(url=f"/transactions?from_date={parsed_date.isoformat()}&to_date={parsed_date.isoformat()}", status_code=303)
+
+
 @app.get("/edit/{tx_id}", response_class=HTMLResponse)
 def edit_payment(request: Request, tx_id: int, db: Session = Depends(get_db)):
     tx = crud.get_transaction(db, tx_id)

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Fast Transactions</h3>
+      <div class="text-muted">Quickly enter common daily transactions</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/transactions">Back</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post" action="/transactions/fast">
+        <div class="row g-3 align-items-end">
+          <div class="col-12 col-md-4">
+            <label class="form-label">Date</label>
+            <input class="form-control" type="date" name="date" value="{{ fast_date }}" required />
+          </div>
+          <div class="col-12">
+            <div class="text-muted mb-2">Enter amount for the rows you want. Leave others as 0.</div>
+            <div class="table-responsive">
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th style="width: 110px;">Type</th>
+                    <th style="width: 220px;">Category</th>
+                    <th>Name</th>
+                    <th class="text-end" style="width: 200px;">Amount (PKR)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in fast_presets %}
+                    <tr>
+                      <td>
+                        <input type="hidden" name="type" value="{{ r.type }}" />
+                        {% if r.type == 'incoming' %}
+                          <span class="badge bg-success">Incoming</span>
+                        {% else %}
+                          <span class="badge bg-danger">Outgoing</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <input type="hidden" name="category" value="{{ r.category }}" />
+                        <span class="text-muted">{{ r.category }}</span>
+                      </td>
+                      <td>
+                        <input class="form-control form-control-sm" name="name" value="{{ r.name }}" />
+                      </td>
+                      <td class="text-end">
+                        <input class="form-control form-control-sm text-end" type="number" min="0" step="1" name="amount_pkr" value="0" />
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="col-12 d-flex justify-content-end gap-2">
+            <a class="btn btn-outline-secondary" href="/transactions">Cancel</a>
+            <button class="btn btn-primary" type="submit">Save Fast Entries</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
