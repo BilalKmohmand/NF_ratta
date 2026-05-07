@@ -1321,6 +1321,11 @@ def daily_in_out_transactions():
     return RedirectResponse(url="/transactions", status_code=303)
 
 
+@app.get("/daily-in-out/fast-transactions")
+def daily_in_out_fast_transactions():
+    return RedirectResponse(url="/transactions/fast", status_code=303)
+
+
 @app.get("/daily-in-out/reports")
 def daily_in_out_reports():
     return RedirectResponse(url="/reports", status_code=303)
@@ -2086,6 +2091,7 @@ def transactions_fast(request: Request, db: Session = Depends(get_db), date: str
             "fast_presets": [
                 {"type": "outgoing", "category": "Employee", "name": "Murtaza"},
                 {"type": "outgoing", "category": "Employee", "name": "Bilal"},
+                {"type": "outgoing", "category": "Committee", "name": "Sheikh"},
                 {"type": "outgoing", "category": "Polish Wala", "name": "Polish Wala"},
                 {"type": "outgoing", "category": "Poshish", "name": ""},
                 {"type": "outgoing", "category": "Zaati Kharcha", "name": "Zaati Kharcha"},
@@ -2100,6 +2106,41 @@ def transactions_fast(request: Request, db: Session = Depends(get_db), date: str
     return TEMPLATES.TemplateResponse("transactions_fast.html", ctx)
 
 
+@app.get("/transactions/fast/duplicate-last-day")
+def transactions_fast_duplicate_last_day(date: str, db: Session = Depends(get_db)):
+    parsed_date = parse_date(date) or dt.date.today()
+    prev = parsed_date - dt.timedelta(days=1)
+
+    try:
+        txs = (
+            db.execute(
+                select(Transaction)
+                .where(Transaction.is_deleted.is_(False))
+                .where(Transaction.date == prev)
+                .order_by(Transaction.id.asc())
+            )
+            .scalars()
+            .all()
+        )
+    except Exception:
+        txs = []
+
+    return {
+        "prev_date": prev.isoformat(),
+        "items": [
+            {
+                "type": t.type,
+                "category": t.category,
+                "name": t.name or "",
+                "amount_pkr": int(t.amount_pkr or 0),
+                "payment_method": getattr(t, "payment_method", None) or "",
+                "notes": t.notes or "",
+            }
+            for t in txs
+        ],
+    }
+
+
 @app.post("/transactions/fast", response_class=HTMLResponse)
 def transactions_fast_post(
     request: Request,
@@ -2109,6 +2150,8 @@ def transactions_fast_post(
     category: list[str] = Form(...),
     name: list[str] = Form(...),
     amount_pkr: list[int] = Form(...),
+    payment_method: list[str] = Form([]),
+    notes: list[str] = Form([]),
 ):
     parsed_date = parse_date(date) or dt.date.today()
 
@@ -2132,6 +2175,9 @@ def transactions_fast_post(
         if errs:
             continue
 
+        pm = (payment_method[i] if i < len(payment_method) else "")
+        note = (notes[i] if i < len(notes) else "")
+
         crud.create_transaction(
             db,
             type=t,
@@ -2140,7 +2186,8 @@ def transactions_fast_post(
             category=c,
             name=(n or "").strip() or None,
             bill_no=None,
-            notes="fast",
+            notes=(note or "").strip() or "fast",
+            payment_method=(pm or "").strip() or None,
         )
         created += 1
 

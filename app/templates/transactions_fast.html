@@ -4,67 +4,250 @@
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
       <h3 class="mb-0">Fast Transactions</h3>
-      <div class="text-muted">Quickly enter common daily transactions</div>
+      <div class="text-muted">Daily In/Out • batch entry</div>
     </div>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-secondary" href="/transactions">Back</a>
     </div>
   </div>
 
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Incoming</div><div class="fs-4 fw-bold" id="kpiIncoming">PKR 0</div></div></div></div>
+    <div class="col-12 col-md-4"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Outgoing</div><div class="fs-4 fw-bold" id="kpiOutgoing">PKR 0</div></div></div></div>
+    <div class="col-12 col-md-4"><div class="card card-kpi"><div class="card-body"><div class="text-muted">Net (this batch)</div><div class="fs-4 fw-bold" id="kpiNet">PKR 0</div></div></div></div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="fw-semibold">Repetitive Names</div>
+        <div class="text-muted small">tap to add a row</div>
+      </div>
+      <div class="d-flex flex-wrap gap-2 mt-2" id="chipWrap"></div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-body">
-      <form method="post" action="/transactions/fast">
-        <div class="row g-3 align-items-end">
-          <div class="col-12 col-md-4">
-            <label class="form-label">Date</label>
-            <input class="form-control" type="date" name="date" value="{{ fast_date }}" required />
-          </div>
-          <div class="col-12">
-            <div class="text-muted mb-2">Enter amount for the rows you want. Leave others as 0.</div>
-            <div class="table-responsive">
-              <table class="table table-sm mb-0">
-                <thead>
-                  <tr>
-                    <th style="width: 110px;">Type</th>
-                    <th style="width: 220px;">Category</th>
-                    <th>Name</th>
-                    <th class="text-end" style="width: 200px;">Amount (PKR)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for r in fast_presets %}
-                    <tr>
-                      <td>
-                        <input type="hidden" name="type" value="{{ r.type }}" />
-                        {% if r.type == 'incoming' %}
-                          <span class="badge bg-success">Incoming</span>
-                        {% else %}
-                          <span class="badge bg-danger">Outgoing</span>
-                        {% endif %}
-                      </td>
-                      <td>
-                        <input type="hidden" name="category" value="{{ r.category }}" />
-                        <span class="text-muted">{{ r.category }}</span>
-                      </td>
-                      <td>
-                        <input class="form-control form-control-sm" name="name" value="{{ r.name }}" />
-                      </td>
-                      <td class="text-end">
-                        <input class="form-control form-control-sm text-end" type="number" min="0" step="1" name="amount_pkr" value="0" />
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div class="btn-group" role="group">
+          <button class="btn btn-outline-primary" type="button" id="btnIncoming">Incoming</button>
+          <button class="btn btn-outline-danger" type="button" id="btnOutgoing">Outgoing</button>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-dark" type="button" id="btnAddRow">+ Add Row</button>
+          <button class="btn btn-outline-secondary" type="button" id="btnDuplicate">Duplicate Last Day</button>
+        </div>
+        <div class="text-muted small">Enter = next row</div>
+      </div>
 
-          <div class="col-12 d-flex justify-content-end gap-2">
-            <a class="btn btn-outline-secondary" href="/transactions">Cancel</a>
-            <button class="btn btn-primary" type="submit">Save Fast Entries</button>
+      <form method="post" action="/transactions/fast" id="fastForm">
+        <div class="row g-3 mb-3">
+          <div class="col-12 col-md-3">
+            <label class="form-label">Date</label>
+            <input class="form-control" type="date" name="date" id="dateInput" value="{{ fast_date }}" required />
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width: 110px;">Type</th>
+                <th style="width: 160px;">Date</th>
+                <th style="width: 200px;">Category</th>
+                <th>Name</th>
+                <th class="text-end" style="width: 180px;">Amount (PKR)</th>
+                <th style="width: 140px;">Method</th>
+                <th style="width: 220px;">Notes</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+
+        <div class="d-flex align-items-center justify-content-between gap-2 mt-3">
+          <div class="text-muted" id="readyText">0 of 0 rows ready • PKR 0 net</div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-dark" type="button" id="btnAddRowBottom">+ Add Row</button>
+            <button class="btn btn-primary" type="submit" id="btnSave">Save All (0)</button>
           </div>
         </div>
       </form>
     </div>
   </div>
+{% endblock %}
+
+{% block scripts %}
+<script type="application/json" id="fastPresetsData">{{ fast_presets | tojson }}</script>
+<script type="application/json" id="fastMethodsData">{{ payment_methods | tojson }}</script>
+<script>
+  const PRESETS = JSON.parse(document.getElementById('fastPresetsData')?.textContent || '[]');
+  const PAYMENT_METHODS = JSON.parse(document.getElementById('fastMethodsData')?.textContent || '[]');
+
+  function pkr(n) {
+    try {
+      const x = Number(n || 0);
+      return 'PKR ' + x.toLocaleString('en-PK');
+    } catch (e) {
+      return 'PKR ' + (n || 0);
+    }
+  }
+
+  function buildChip(p) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm ' + (p.type === 'incoming' ? 'btn-outline-success' : 'btn-outline-danger');
+    btn.textContent = p.name ? (p.name + ' · ' + p.category) : p.category;
+    btn.addEventListener('click', () => addRow(p));
+    return btn;
+  }
+
+  function buildMethodSelect(value) {
+    const sel = document.createElement('select');
+    sel.className = 'form-select form-select-sm';
+    sel.name = 'payment_method';
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.textContent = 'None';
+    sel.appendChild(opt0);
+    for (const m of PAYMENT_METHODS || []) {
+      const o = document.createElement('option');
+      o.value = m;
+      o.textContent = m;
+      if (m === value) o.selected = true;
+      sel.appendChild(o);
+    }
+    return sel;
+  }
+
+  function addRow(preset) {
+    const tbody = document.getElementById('rows');
+    const tr = document.createElement('tr');
+    const dateVal = document.getElementById('dateInput').value;
+
+    const typeVal = preset?.type || window.__activeType || 'outgoing';
+    const catVal = preset?.category || '';
+    const nameVal = preset?.name || '';
+
+    tr.innerHTML = `
+      <td>
+        <input type="hidden" name="type" value="${typeVal}" />
+        <span class="badge ${typeVal === 'incoming' ? 'bg-success' : 'bg-danger'}">${typeVal === 'incoming' ? 'Incoming' : 'Outgoing'}</span>
+      </td>
+      <td>
+        <input class="form-control form-control-sm" type="date" value="${dateVal}" disabled />
+      </td>
+      <td>
+        <input class="form-control form-control-sm" name="category" value="${catVal}" placeholder="Category" />
+      </td>
+      <td>
+        <input class="form-control form-control-sm" name="name" value="${nameVal}" placeholder="Name" />
+      </td>
+      <td class="text-end">
+        <input class="form-control form-control-sm text-end amt" type="number" min="0" step="1" name="amount_pkr" value="0" />
+      </td>
+      <td class="method"></td>
+      <td>
+        <input class="form-control form-control-sm" name="notes" placeholder="Notes" />
+      </td>
+    `;
+
+    tr.querySelector('.method').appendChild(buildMethodSelect('Cash'));
+
+    const amt = tr.querySelector('input.amt');
+    amt.addEventListener('input', refreshTotals);
+    amt.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const next = tr.nextElementSibling?.querySelector('input.amt');
+        if (next) {
+          next.focus();
+        } else {
+          addRow({ type: window.__activeType || 'outgoing', category: '', name: '' });
+          setTimeout(() => tbody.lastElementChild?.querySelector('input.amt')?.focus(), 0);
+        }
+      }
+    });
+
+    tbody.appendChild(tr);
+    refreshTotals();
+  }
+
+  function refreshTotals() {
+    const tbody = document.getElementById('rows');
+    let inc = 0;
+    let out = 0;
+    let ready = 0;
+    let rows = 0;
+    for (const tr of tbody.querySelectorAll('tr')) {
+      rows += 1;
+      const type = tr.querySelector('input[name="type"]')?.value || 'outgoing';
+      const amt = Number(tr.querySelector('input[name="amount_pkr"]')?.value || 0);
+      const cat = (tr.querySelector('input[name="category"]')?.value || '').trim();
+      if (amt > 0 && cat) ready += 1;
+      if (amt > 0) {
+        if (type === 'incoming') inc += amt;
+        else out += amt;
+      }
+    }
+    const net = inc - out;
+    document.getElementById('kpiIncoming').textContent = pkr(inc);
+    document.getElementById('kpiOutgoing').textContent = pkr(out);
+    document.getElementById('kpiNet').textContent = pkr(net);
+    document.getElementById('readyText').textContent = `${ready} of ${rows} rows ready • ${pkr(net)} net`;
+    document.getElementById('btnSave').textContent = `Save All (${ready})`;
+  }
+
+  function setActiveType(t) {
+    window.__activeType = t;
+    const a = document.getElementById('btnIncoming');
+    const b = document.getElementById('btnOutgoing');
+    if (t === 'incoming') {
+      a.className = 'btn btn-primary';
+      b.className = 'btn btn-outline-danger';
+    } else {
+      a.className = 'btn btn-outline-primary';
+      b.className = 'btn btn-danger';
+    }
+  }
+
+  async function duplicateLastDay() {
+    const date = document.getElementById('dateInput').value;
+    const res = await fetch(`/transactions/fast/duplicate-last-day?date=${encodeURIComponent(date)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.getElementById('rows');
+    tbody.innerHTML = '';
+    for (const item of (data.items || [])) {
+      addRow({ type: item.type, category: item.category, name: item.name });
+      const tr = tbody.lastElementChild;
+      tr.querySelector('input[name="amount_pkr"]').value = String(item.amount_pkr || 0);
+      tr.querySelector('input[name="notes"]').value = item.notes || '';
+      const sel = tr.querySelector('select[name="payment_method"]');
+      if (sel && item.payment_method) sel.value = item.payment_method;
+    }
+    refreshTotals();
+  }
+
+  (function init() {
+    setActiveType('outgoing');
+    const chips = document.getElementById('chipWrap');
+    for (const p of PRESETS || []) chips.appendChild(buildChip(p));
+
+    document.getElementById('btnIncoming').addEventListener('click', () => setActiveType('incoming'));
+    document.getElementById('btnOutgoing').addEventListener('click', () => setActiveType('outgoing'));
+    document.getElementById('btnAddRow').addEventListener('click', () => addRow({ type: window.__activeType }));
+    document.getElementById('btnAddRowBottom').addEventListener('click', () => addRow({ type: window.__activeType }));
+    document.getElementById('btnDuplicate').addEventListener('click', duplicateLastDay);
+    document.getElementById('dateInput').addEventListener('change', () => {
+      const tbody = document.getElementById('rows');
+      for (const input of tbody.querySelectorAll('input[type="date"]')) input.value = document.getElementById('dateInput').value;
+    });
+
+    addRow({ type: 'outgoing' });
+    addRow({ type: 'outgoing' });
+    addRow({ type: 'outgoing' });
+  })();
+</script>
 {% endblock %}
