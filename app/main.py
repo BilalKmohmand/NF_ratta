@@ -252,6 +252,16 @@ def common_context(request: Request):
     }
 
 
+@app.get("/__version")
+def version_info():
+    return {
+        "vercel": bool(os.getenv("VERCEL")),
+        "git_sha": os.getenv("VERCEL_GIT_COMMIT_SHA") or os.getenv("GIT_SHA") or "",
+        "git_ref": os.getenv("VERCEL_GIT_COMMIT_REF") or "",
+        "deployment": os.getenv("VERCEL_DEPLOYMENT_ID") or "",
+    }
+
+
 @app.get("/clients", response_class=HTMLResponse)
 def clients_index(request: Request, db: Session = Depends(get_db), q: str | None = None):
     items = crud.list_clients(db, q=q)
