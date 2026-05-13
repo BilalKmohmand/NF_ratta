@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import csv
 import datetime as dt
 import io
@@ -307,11 +308,50 @@ def client_detail(request: Request, client_id: int, db: Session = Depends(get_db
     return TEMPLATES.TemplateResponse("client_detail.html", ctx)
 
 
+def _group_bills_by_year_month(items: list) -> list[dict]:
+    """Group bills by calendar year then month (newest first) for the bills index UI."""
+    from collections import defaultdict
+
+    by_year: dict[int, dict[int, list]] = defaultdict(lambda: defaultdict(list))
+    for b in items:
+        d = getattr(b, "date", None)
+        if d is None:
+            continue
+        y, m = int(d.year), int(d.month)
+        by_year[y][m].append(b)
+
+    groups: list[dict] = []
+    for y in sorted(by_year.keys(), reverse=True):
+        months_list: list[dict] = []
+        year_count = 0
+        for m in sorted(by_year[y].keys(), reverse=True):
+            bills_m = by_year[y][m]
+            c = len(bills_m)
+            year_count += c
+            months_list.append(
+                {
+                    "month": m,
+                    "label": f"{calendar.month_name[m]} {y}",
+                    "count": c,
+                    "bills": bills_m,
+                }
+            )
+        groups.append({"year": y, "count": year_count, "months": months_list})
+    return groups
+
+
 @app.get("/bills", response_class=HTMLResponse)
 def bills_index(request: Request, db: Session = Depends(get_db), q: str | None = None, status: str | None = None):
     items = crud.list_bills(db, q=q, status=status)
     ctx = common_context(request)
-    ctx.update({"items": items, "q": q or "", "status": status or ""})
+    ctx.update(
+        {
+            "items": items,
+            "q": q or "",
+            "status": status or "",
+            "bill_groups": _group_bills_by_year_month(items),
+        }
+    )
     return TEMPLATES.TemplateResponse("bills.html", ctx)
 
 
