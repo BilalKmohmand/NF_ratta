@@ -108,19 +108,24 @@ SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-secret")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
 
+_PUBLIC_PATH_PREFIXES = ("/static",)
+_PUBLIC_PATHS = frozenset({"/login", "/logout", "/health"})
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if path.startswith("/static"):
+        if any(path.startswith(p) for p in _PUBLIC_PATH_PREFIXES):
             return await call_next(request)
-        if path in {"/login", "/logout"}:
+        if path in _PUBLIC_PATHS:
             return await call_next(request)
         if not _is_logged_in(request):
             return RedirectResponse(url="/login", status_code=303)
         return await call_next(request)
 
 
-# Order matters: SessionMiddleware must run BEFORE auth so request.session works.
+# Session must be available in AuthMiddleware.dispatch. Starlette runs the last
+# registered middleware first on the request, so register Session after Auth.
 app.add_middleware(AuthMiddleware)
 app.add_middleware(
     SessionMiddleware,
@@ -260,6 +265,12 @@ def version_info():
         "git_ref": os.getenv("VERCEL_GIT_COMMIT_REF") or "",
         "deployment": os.getenv("VERCEL_DEPLOYMENT_ID") or "",
     }
+
+
+@app.get("/health")
+def health():
+    """Unauthenticated liveness check (hosting probes, load balancers)."""
+    return {"status": "ok"}
 
 
 @app.get("/clients", response_class=HTMLResponse)
