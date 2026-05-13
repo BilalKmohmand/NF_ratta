@@ -1973,6 +1973,11 @@ def validate_form(type: str, category: str, bill_no: str | None, amount_pkr: int
     return errors
 
 
+def _fast_payment_field(pm: str | None) -> str:
+    x = (pm or "").strip().lower()
+    return x if x in PAYMENT_METHODS else ""
+
+
 @app.post("/add", response_class=HTMLResponse)
 def add_payment_post(
     request: Request,
@@ -2109,12 +2114,88 @@ def transactions_fast(request: Request, db: Session = Depends(get_db), date: str
                 {"type": "outgoing", "category": "Chai / Nashta", "name": "Chai / Nashta"},
                 {"type": "outgoing", "category": "Rent", "name": "Rent"},
                 {"type": "outgoing", "category": "Utilities", "name": "Bijli Bill"},
-                {"type": "incoming", "category": "Shop", "name": "Shop Sale"},
-                {"type": "incoming", "category": "Client", "name": "Client Payment"},
+                {"type": "incoming", "category": "Other", "name": "Shop Sale"},
+                {"type": "incoming", "category": "Other", "name": "Client Payment"},
             ],
         }
     )
     return TEMPLATES.TemplateResponse("transactions_fast.html", ctx)
+
+
+@app.get("/transactions/fast/recent-bills")
+def transactions_fast_recent_bills(request: Request, db: Session = Depends(get_db), limit: int = 60):
+    lim = max(1, min(int(limit or 60), 120))
+    bills = crud.list_bills(db, limit=lim)
+    return JSONResponse(
+        [
+            {
+                "id": b.id,
+                "bill_no": int(b.bill_no),
+                "date": b.date.isoformat(),
+                "customer_name": b.customer_name,
+                "grand_total_pkr": int(b.grand_total_pkr or 0),
+                "balance_pkr": int(b.balance_pkr or 0),
+            }
+            for b in bills
+        ]
+    )
+
+
+@app.post("/transactions/fast/import-bills")
+async def transactions_fast_import_bills(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    raw_ids = form.getlist("bill_id")
+    seen: set[int] = set()
+    ordered: list[int] = []
+    for v in raw_ids:
+        try:
+            bid = int(v)
+        except (TypeError, ValueError):
+            continue
+        if bid not in seen:
+            seen.add(bid)
+            ordered.append(bid)
+
+    items: list[dict[str, str | int]] = []
+    for bid in ordered:
+        bill = crud.get_bill(db, bid)
+        if not bill or bill.is_deleted:
+            continue
+        lines = crud.list_bill_items(db, bill_id=bill.id)
+        if lines:
+            for it in lines:
+                amt = int(it.amount_pkr or 0)
+                if amt <= 0:
+                    continue
+                desc = (it.description or "").strip() or "Line item"
+                items.append(
+                    {
+                        "type": "incoming",
+                        "category": "Client",
+                        "name": desc[:256],
+                        "amount_pkr": amt,
+                        "payment_method": _fast_payment_field(bill.payment_method),
+                        "notes": f"Bill #{bill.bill_no} · {bill.customer_name}",
+                        "bill_no": str(int(bill.bill_no)),
+                    }
+                )
+        else:
+            gt = int(bill.grand_total_pkr or 0)
+            if gt <= 0:
+                continue
+            items.append(
+                {
+                    "type": "incoming",
+                    "category": "Client",
+                    "name": ((bill.customer_name or "").strip() or f"Bill #{bill.bill_no}")[:256],
+                    "amount_pkr": gt,
+                    "payment_method": _fast_payment_field(bill.payment_method),
+                    "notes": f"Bill #{bill.bill_no} (total)",
+                    "bill_no": str(int(bill.bill_no)),
+                }
+            )
+
+    return JSONResponse({"items": items})
 
 
 @app.get("/transactions/fast/duplicate-last-day")
@@ -2144,8 +2225,9 @@ def transactions_fast_duplicate_last_day(date: str, db: Session = Depends(get_db
                 "category": t.category,
                 "name": t.name or "",
                 "amount_pkr": int(t.amount_pkr or 0),
-                "payment_method": getattr(t, "payment_method", None) or "",
+                "payment_method": _fast_payment_field(getattr(t, "payment_method", None)),
                 "notes": t.notes or "",
+                "bill_no": (str(t.bill_no).strip() if getattr(t, "bill_no", None) else "") or "",
             }
             for t in txs
         ],
@@ -2163,6 +2245,7 @@ def transactions_fast_post(
     amount_pkr: list[int] = Form(...),
     payment_method: list[str] = Form([]),
     notes: list[str] = Form([]),
+    bill_no: list[str] = Form([]),
 ):
     parsed_date = parse_date(date) or dt.date.today()
 
@@ -2179,10 +2262,13 @@ def transactions_fast_post(
 
         if amt <= 0:
             continue
+        if not c:
+            continue
         if t not in {"incoming", "outgoing"}:
             continue
 
-        errs = validate_form(t, c, None, amt)
+        bn = (bill_no[i] if i < len(bill_no) else "").strip()
+        errs = validate_form(t, c, bn or None, amt)
         if errs:
             continue
 
@@ -2196,7 +2282,7 @@ def transactions_fast_post(
             amount_pkr=int(amt),
             category=c,
             name=(n or "").strip() or None,
-            bill_no=None,
+            bill_no=bn or None,
             notes=(note or "").strip() or "fast",
             payment_method=(pm or "").strip() or None,
         )
