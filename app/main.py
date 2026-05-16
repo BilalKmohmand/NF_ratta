@@ -116,21 +116,24 @@ _PUBLIC_PATHS = frozenset({"/login", "/logout", "/health"})
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if path.startswith("/static"):
+        if any(path.startswith(p) for p in _PUBLIC_PATH_PREFIXES):
             return await call_next(request)
-        if path in {"/login", "/logout", "/health"}:
+        if path in _PUBLIC_PATHS:
             return await call_next(request)
         if not _is_logged_in(request):
             return RedirectResponse(url="/login", status_code=303)
         return await call_next(request)
 
 
-# Order matters: SessionMiddleware must run BEFORE auth so request.session works.
+# Starlette runs the last registered middleware first on the request, so register
+# Session after Auth to ensure request.session is available in AuthMiddleware.
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SESSION_SECRET", "dev-secret-key"),
+    secret_key=SESSION_SECRET,
+    same_site="lax",
+    https_only=os.getenv("VERCEL") is not None,
 )
-app.add_middleware(AuthMiddleware)
 
 BASE_DIR = __import__("pathlib").Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -153,7 +156,7 @@ def on_startup() -> None:
         try:
             Base.metadata.create_all(bind=engine)
         except Exception:
-            return
+            pass
 
         if not IS_SQLITE:
             try:

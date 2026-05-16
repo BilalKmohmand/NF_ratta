@@ -190,7 +190,9 @@ def _bill_status(*, grand_total_pkr: int, paid_amount_pkr: int) -> str:
 
 
 def get_next_bill_no(db: Session) -> int:
-    max_no = db.execute(select(func.max(Bill.bill_no))).scalar_one_or_none()
+    max_no = db.execute(
+        select(func.max(Bill.bill_no)).where(Bill.is_deleted.is_(False), Bill.bill_no > 0)
+    ).scalar_one_or_none()
     return int(max_no or 0) + 1
 
 
