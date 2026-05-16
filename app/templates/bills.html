@@ -115,14 +115,15 @@
     </div>
   {% else %}
     {% for g in bill_groups %}
-      <details class="card mb-3 bills-details"{% if loop.first %} open{% endif %}>
+      {% set yearloop = loop %}
+      <details class="card mb-3 bills-details"{% if yearloop.first %} open{% endif %}>
         <summary class="card-header d-flex align-items-center justify-content-between py-3">
           <span class="fs-5 fw-semibold mb-0">{{ g.year }}</span>
           <span class="badge bg-secondary rounded-pill">{{ g.count }} bill{% if g.count != 1 %}s{% endif %}</span>
         </summary>
         <div class="card-body pt-2">
           {% for m in g.months %}
-            <details class="border rounded mb-3 bills-details"{% if loop.parent.first and loop.first %} open{% endif %}>
+            <details class="border rounded mb-3 bills-details"{% if yearloop.first and loop.first %} open{% endif %}>
               <summary class="px-3 py-2 d-flex align-items-center justify-content-between bg-body-secondary rounded-top">
                 <span class="fw-medium mb-0">{{ m.label }}</span>
                 <span class="badge bg-primary rounded-pill">{{ m.count }}</span>
