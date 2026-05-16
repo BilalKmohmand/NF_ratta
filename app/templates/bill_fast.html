@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0">Fast Bill</h3>
+      <div class="text-muted">Enter multiple past bills in one batch</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/bills">Back to Bills</a>
+      <a class="btn btn-outline-primary" href="/bills/new">Full Bill Form</a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+      <div class="card card-kpi h-100">
+        <div class="card-body">
+          <div class="text-muted">Rows ready</div>
+          <div class="fs-4 fw-bold" id="kpiReady">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card card-kpi h-100">
+        <div class="card-body">
+          <div class="text-muted">Batch total (PKR)</div>
+          <div class="fs-4 fw-bold" id="kpiTotal">PKR 0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card card-kpi h-100">
+        <div class="card-body">
+          <div class="text-muted">Next bill # (for new rows)</div>
+          <input class="form-control form-control-lg fw-bold" type="number" id="nextBillNoInput" min="1" value="{{ next_bill_no }}" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="fw-semibold mb-2">Quick customers</div>
+      <div class="text-muted small mb-2">Tap to add a row with name and phone</div>
+      <div class="d-flex flex-wrap gap-2" id="clientChips"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div class="text-muted small">Each row = one bill (one line item). Set the <strong>date per row</strong> for past records.</div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-dark" type="button" id="btnAddRow">+ Add Row</button>
+          <button class="btn btn-outline-secondary" type="button" id="btnAddFive">+ Add 5 Rows</button>
+        </div>
+      </div>
+
+      <datalist id="clientNames">
+        {% for c in clients %}
+          <option value="{{ c.name }}">{{ c.phone }}</option>
+        {% endfor %}
+      </datalist>
+
+      <form method="post" action="/bills/fast" id="fastBillForm">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width: 90px;">Bill #</th>
+                <th style="width: 150px;">Date</th>
+                <th style="width: 160px;">Customer</th>
+                <th style="width: 120px;">Phone</th>
+                <th>Description</th>
+                <th style="width: 70px;">Qty</th>
+                <th class="text-end" style="width: 110px;">Rate</th>
+                <th class="text-end" style="width: 90px;">Disc.</th>
+                <th class="text-end" style="width: 90px;">Paid</th>
+                <th style="width: 100px;">Method</th>
+                <th style="width: 56px;"></th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+
+        <div class="d-flex align-items-center justify-content-between gap-2 mt-3">
+          <div class="text-muted" id="readyText">0 rows ready</div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-dark" type="button" id="btnAddRowBottom">+ Add Row</button>
+            <button class="btn btn-success" type="submit" id="btnSave">Save All (0)</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script type="application/json" id="fastClientsData">{{ clients | map(attribute='name') | list | tojson }}</script>
+<script type="application/json" id="fastClientPhonesData">{{ client_phones | tojson }}</script>
+<script type="application/json" id="fastMethodsData">{{ payment_methods | tojson }}</script>
+<script>
+  const CLIENT_NAMES = JSON.parse(document.getElementById('fastClientsData')?.textContent || '[]');
+  const CLIENT_PHONES = JSON.parse(document.getElementById('fastClientPhonesData')?.textContent || '{}');
+  const PAYMENT_METHODS = JSON.parse(document.getElementById('fastMethodsData')?.textContent || '[]');
+  const DEFAULT_DATE = {{ fast_date | tojson }};
+
+  function escAttr(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function pkr(n) {
+    try {
+      return 'PKR ' + Number(n || 0).toLocaleString('en-PK');
+    } catch (e) {
+      return 'PKR ' + (n || 0);
+    }
+  }
+
+  function nextBillNo() {
+    const el = document.getElementById('nextBillNoInput');
+    const n = Number(el?.value || 1);
+    if (el) el.value = String(n + 1);
+    return n;
+  }
+
+  function rowHasData(tr) {
+    const name = (tr.querySelector('input[name="customer_name"]')?.value || '').trim();
+    const desc = (tr.querySelector('input[name="item_description"]')?.value || '').trim();
+    const rate = Number(tr.querySelector('input[name="item_rate_pkr"]')?.value || 0);
+    const bno = Number(tr.querySelector('input[name="bill_no"]')?.value || 0);
+    return Boolean(name && desc && rate > 0 && bno > 0);
+  }
+
+  function buildMethodSelect(value) {
+    const sel = document.createElement('select');
+    sel.className = 'form-select form-select-sm';
+    sel.name = 'payment_method';
+    const v = String(value || 'cash').toLowerCase();
+    const methods = PAYMENT_METHODS?.length ? PAYMENT_METHODS : ['cash'];
+    for (const m of methods) {
+      const o = document.createElement('option');
+      o.value = m;
+      o.textContent = m;
+      if (m === v) o.selected = true;
+      sel.appendChild(o);
+    }
+    return sel;
+  }
+
+  function wireRow(tr) {
+    tr.querySelectorAll('input').forEach((inp) => inp.addEventListener('input', refreshTotals));
+    tr.querySelector('select[name="payment_method"]')?.addEventListener('change', refreshTotals);
+    tr.querySelector('.btn-row-delete')?.addEventListener('click', () => {
+      tr.remove();
+      refreshTotals();
+    });
+    const nameInp = tr.querySelector('input[name="customer_name"]');
+    nameInp?.addEventListener('change', () => {
+      const phone = CLIENT_PHONES[nameInp.value.trim()];
+      if (phone) {
+        const ph = tr.querySelector('input[name="customer_phone"]');
+        if (ph && !ph.value.trim()) ph.value = phone;
+      }
+    });
+    const rate = tr.querySelector('input[name="item_rate_pkr"]');
+    rate?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const tbody = document.getElementById('rows');
+      const next = tr.nextElementSibling?.querySelector('input[name="item_rate_pkr"]');
+      if (next) {
+        next.focus();
+        return;
+      }
+      if (!rowHasData(tr)) return;
+      addRow();
+      setTimeout(() => tbody.lastElementChild?.querySelector('input[name="customer_name"]')?.focus(), 0);
+    });
+  }
+
+  function addRow(preset) {
+    const tbody = document.getElementById('rows');
+    const tr = document.createElement('tr');
+    const bno = preset?.bill_no ?? nextBillNo();
+    const dateVal = preset?.date || DEFAULT_DATE;
+    const trPreset = preset || {};
+
+    tr.innerHTML = `
+      <td><input class="form-control form-control-sm" type="number" min="1" step="1" name="bill_no" value="${bno}" required /></td>
+      <td><input class="form-control form-control-sm" type="date" name="date" value="${escAttr(dateVal)}" required /></td>
+      <td><input class="form-control form-control-sm" name="customer_name" list="clientNames" value="${escAttr(trPreset.customer_name || '')}" placeholder="Name" required /></td>
+      <td><input class="form-control form-control-sm" name="customer_phone" value="${escAttr(trPreset.customer_phone || '')}" placeholder="Phone" /></td>
+      <td><input class="form-control form-control-sm" name="item_description" value="${escAttr(trPreset.item_description || '')}" placeholder="Item / work" required /></td>
+      <td><input class="form-control form-control-sm text-center" type="number" min="1" step="1" name="item_quantity" value="${trPreset.item_quantity ?? 1}" /></td>
+      <td class="text-end"><input class="form-control form-control-sm text-end" type="number" min="0" step="1" name="item_rate_pkr" value="${trPreset.item_rate_pkr ?? 0}" /></td>
+      <td class="text-end"><input class="form-control form-control-sm text-end" type="number" min="0" step="1" name="discount_pkr" value="${trPreset.discount_pkr ?? 0}" /></td>
+      <td class="text-end"><input class="form-control form-control-sm text-end" type="number" min="0" step="1" name="paid_amount_pkr" value="${trPreset.paid_amount_pkr ?? 0}" /></td>
+      <td class="method"></td>
+      <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger btn-row-delete" title="Remove">×</button></td>
+    `;
+    tr.querySelector('.method').appendChild(buildMethodSelect(trPreset.payment_method));
+    wireRow(tr);
+    tbody.appendChild(tr);
+    refreshTotals();
+  }
+
+  function refreshTotals() {
+    const tbody = document.getElementById('rows');
+    let ready = 0;
+    let total = 0;
+    let rows = 0;
+    for (const tr of tbody.querySelectorAll('tr')) {
+      rows += 1;
+      if (!rowHasData(tr)) continue;
+      ready += 1;
+      const qty = Math.max(1, Number(tr.querySelector('input[name="item_quantity"]')?.value || 1));
+      const rate = Number(tr.querySelector('input[name="item_rate_pkr"]')?.value || 0);
+      const disc = Number(tr.querySelector('input[name="discount_pkr"]')?.value || 0);
+      total += Math.max(0, qty * rate - disc);
+    }
+    document.getElementById('kpiReady').textContent = String(ready);
+    document.getElementById('kpiTotal').textContent = pkr(total);
+    document.getElementById('readyText').textContent = `${ready} of ${rows} rows ready • ${pkr(total)} batch total`;
+    document.getElementById('btnSave').textContent = `Save All (${ready})`;
+  }
+
+  function buildClientChip(name) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm btn-outline-primary';
+    btn.textContent = name;
+    btn.addEventListener('click', () => {
+      addRow({
+        customer_name: name,
+        customer_phone: CLIENT_PHONES[name] || '',
+        item_description: '',
+        item_rate_pkr: 0,
+      });
+      document.getElementById('rows').lastElementChild?.querySelector('input[name="item_description"]')?.focus();
+    });
+    return btn;
+  }
+
+  (function init() {
+    const wrap = document.getElementById('clientChips');
+    const seen = new Set();
+    for (const name of CLIENT_NAMES || []) {
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      wrap.appendChild(buildClientChip(name));
+      if (seen.size >= 24) break;
+    }
+
+    document.getElementById('btnAddRow').addEventListener('click', () => addRow());
+    document.getElementById('btnAddRowBottom').addEventListener('click', () => addRow());
+    document.getElementById('btnAddFive').addEventListener('click', () => {
+      for (let i = 0; i < 5; i++) addRow();
+    });
+
+    document.getElementById('fastBillForm').addEventListener('submit', (e) => {
+      const tbody = document.getElementById('rows');
+      for (const tr of [...tbody.querySelectorAll('tr')]) {
+        if (!rowHasData(tr)) tr.remove();
+      }
+      if (!tbody.querySelectorAll('tr').length) {
+        e.preventDefault();
+        alert('Add at least one complete row (bill #, date, customer, description, rate > 0).');
+        refreshTotals();
+      }
+    });
+
+    addRow();
+  })();
+</script>
+{% endblock %}

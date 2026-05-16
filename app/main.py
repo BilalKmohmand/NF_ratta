@@ -116,24 +116,21 @@ _PUBLIC_PATHS = frozenset({"/login", "/logout", "/health"})
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if any(path.startswith(p) for p in _PUBLIC_PATH_PREFIXES):
+        if path.startswith("/static"):
             return await call_next(request)
-        if path in _PUBLIC_PATHS:
+        if path in {"/login", "/logout", "/health"}:
             return await call_next(request)
         if not _is_logged_in(request):
             return RedirectResponse(url="/login", status_code=303)
         return await call_next(request)
 
 
-# Session must be available in AuthMiddleware.dispatch. Starlette runs the last
-# registered middleware first on the request, so register Session after Auth.
-app.add_middleware(AuthMiddleware)
+# Order matters: SessionMiddleware must run BEFORE auth so request.session works.
 app.add_middleware(
     SessionMiddleware,
-    secret_key=SESSION_SECRET,
-    same_site="lax",
-    https_only=os.getenv("VERCEL") is not None,
+    secret_key=os.getenv("SESSION_SECRET", "dev-secret-key"),
 )
+app.add_middleware(AuthMiddleware)
 
 BASE_DIR = __import__("pathlib").Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -353,6 +350,176 @@ def bills_index(request: Request, db: Session = Depends(get_db), q: str | None =
         }
     )
     return TEMPLATES.TemplateResponse("bills.html", ctx)
+
+
+def _save_fast_bill_row(
+    db: Session,
+    *,
+    bill_no: int,
+    parsed_date: dt.date,
+    customer_name: str,
+    customer_phone: str | None,
+    description: str,
+    quantity: int,
+    rate_pkr: int,
+    discount_pkr: int,
+    paid_amount_pkr: int,
+    payment_method: str | None,
+) -> Bill | None:
+    """Create one bill from a fast-entry row. Returns None if bill_no already exists."""
+    qty = max(1, int(quantity or 1))
+    rate = max(0, int(rate_pkr or 0))
+    if rate <= 0:
+        return None
+    subtotal = qty * rate
+    discount = max(0, int(discount_pkr or 0))
+    grand_total = max(0, subtotal - discount)
+    paid = max(0, int(paid_amount_pkr or 0))
+    if paid > grand_total:
+        paid = grand_total
+
+    try:
+        b = crud.create_bill(
+            db,
+            bill_no=int(bill_no),
+            date=parsed_date,
+            client_id=None,
+            customer_name=customer_name.strip(),
+            customer_phone=(customer_phone or "").strip() or None,
+            customer_address=None,
+            subtotal_pkr=subtotal,
+            discount_pkr=discount,
+            grand_total_pkr=grand_total,
+            paid_amount_pkr=0,
+            payment_method=payment_method,
+            payment_notes=None,
+        )
+    except IntegrityError:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return None
+
+    crud.add_bill_item(db, bill_id=b.id, description=description.strip(), quantity=qty, rate_pkr=rate)
+    crud.recalc_bill_totals(db, b)
+
+    if paid > 0:
+        pm = (payment_method or "").strip() or "cash"
+        crud.create_bill_payment(
+            db,
+            bill_id=b.id,
+            date=parsed_date,
+            amount_pkr=paid,
+            payment_method=pm,
+            notes=f"Initial payment for Bill #{b.bill_no}",
+        )
+        crud.create_transaction(
+            db,
+            type="incoming",
+            date=parsed_date,
+            amount_pkr=int(paid),
+            category="Client",
+            name=b.customer_name,
+            bill_no=str(b.bill_no),
+            notes="Bill payment",
+        )
+    return b
+
+
+@app.get("/bills/fast", response_class=HTMLResponse)
+def bills_fast(request: Request, db: Session = Depends(get_db)):
+    clients = crud.list_clients(db, limit=500)
+    ctx = common_context(request)
+    ctx.update(
+        {
+            "fast_date": dt.date.today().isoformat(),
+            "next_bill_no": crud.get_next_bill_no(db),
+            "clients": clients,
+            "client_phones": {c.name: c.phone for c in clients if c.name},
+        }
+    )
+    return TEMPLATES.TemplateResponse("bill_fast.html", ctx)
+
+
+@app.post("/bills/fast", response_class=HTMLResponse)
+def bills_fast_post(
+    request: Request,
+    db: Session = Depends(get_db),
+    bill_no: list[int] = Form(...),
+    date: list[str] = Form(...),
+    customer_name: list[str] = Form(...),
+    customer_phone: list[str] = Form([]),
+    item_description: list[str] = Form(...),
+    item_quantity: list[int] = Form([]),
+    item_rate_pkr: list[int] = Form(...),
+    discount_pkr: list[int] = Form([]),
+    paid_amount_pkr: list[int] = Form([]),
+    payment_method: list[str] = Form([]),
+):
+    rows = max(
+        len(bill_no or []),
+        len(date or []),
+        len(customer_name or []),
+        len(item_description or []),
+        len(item_rate_pkr or []),
+    )
+    created = 0
+    skipped = 0
+    for i in range(rows):
+        name = (customer_name[i] if i < len(customer_name) else "").strip()
+        desc = (item_description[i] if i < len(item_description) else "").strip()
+        if not name or not desc:
+            continue
+        try:
+            bno = int(bill_no[i]) if i < len(bill_no) else 0
+        except Exception:
+            skipped += 1
+            continue
+        if bno <= 0:
+            skipped += 1
+            continue
+        parsed_date = parse_date(date[i] if i < len(date) else "") or dt.date.today()
+        try:
+            qty = int(item_quantity[i]) if i < len(item_quantity) else 1
+        except Exception:
+            qty = 1
+        try:
+            rate = int(item_rate_pkr[i]) if i < len(item_rate_pkr) else 0
+        except Exception:
+            rate = 0
+        if rate <= 0:
+            continue
+        try:
+            discount = int(discount_pkr[i]) if i < len(discount_pkr) else 0
+        except Exception:
+            discount = 0
+        try:
+            paid = int(paid_amount_pkr[i]) if i < len(paid_amount_pkr) else 0
+        except Exception:
+            paid = 0
+        phone = (customer_phone[i] if i < len(customer_phone) else "") or ""
+        pm = (payment_method[i] if i < len(payment_method) else "") or ""
+
+        b = _save_fast_bill_row(
+            db,
+            bill_no=bno,
+            parsed_date=parsed_date,
+            customer_name=name,
+            customer_phone=phone,
+            description=desc,
+            quantity=qty,
+            rate_pkr=rate,
+            discount_pkr=discount,
+            paid_amount_pkr=paid,
+            payment_method=pm,
+        )
+        if b:
+            created += 1
+        else:
+            skipped += 1
+
+    return RedirectResponse(url=f"/bills?fast_created={created}&fast_skipped={skipped}", status_code=303)
 
 
 @app.get("/bills/new", response_class=HTMLResponse)
